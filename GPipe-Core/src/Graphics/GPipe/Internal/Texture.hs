@@ -10,7 +10,7 @@ import Graphics.GPipe.Internal.Buffer
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.IntMap.Lazy (insert)
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Graphics.GL.Ext.EXT.TextureFilterAnisotropic
 

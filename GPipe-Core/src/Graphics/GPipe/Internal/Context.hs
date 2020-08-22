@@ -42,7 +42,7 @@ import qualified Data.IntSet as Set
 import qualified Data.IntMap.Strict as IMap
 import Data.IntMap ((!))
 import qualified Data.Map.Strict as Map
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Control.Concurrent.MVar
 import Data.IORef

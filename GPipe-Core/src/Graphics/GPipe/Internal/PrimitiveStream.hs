@@ -28,7 +28,7 @@ import Foreign.Storable
 import Foreign.Ptr
 import qualified Data.IntMap as Map
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Foreign.Marshal.Utils
 import Data.IORef

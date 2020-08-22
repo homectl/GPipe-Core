@@ -21,7 +21,7 @@ module Graphics.GPipe.Internal.Buffer
 
 import Graphics.GPipe.Internal.Context
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Foreign.Marshal.Utils
 import Foreign.Marshal.Alloc

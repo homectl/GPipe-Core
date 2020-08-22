@@ -59,6 +59,7 @@ library
                     Graphics.GPipe.Internal.PrimitiveStream,
                     Graphics.GPipe.Internal.Shader,
                     Graphics.GPipe.Internal.Texture,
+                    Graphics.GPipe.Internal.TransformFeedback,
                     Graphics.GPipe.Internal.Uniform,
                     Graphics.GPipe.Internal.Orphans
 
@@ -105,9 +106,11 @@ executable playground
                     Graphics.GPipe.Internal.PrimitiveStream,
                     Graphics.GPipe.Internal.Shader,
                     Graphics.GPipe.Internal.Texture,
+                    Graphics.GPipe.Internal.TransformFeedback,
                     Graphics.GPipe.Internal.Uniform,
                     Graphics.GPipe.Internal.Orphans,
                     Graphics.GPipe.Internal.Test,
                     Graphics.GL.Core33,
+                    Graphics.GL.Core45,
                     Graphics.GL.Types,
                     Graphics.GL.Ext.EXT.TextureFilterAnisotropic

@@ -55,6 +55,7 @@ askUniformAlignment = ShaderM ask
 modifyRenderIO :: (RenderIOState s -> RenderIOState s) -> ShaderM s ()
 modifyRenderIO f = ShaderM $ lift $ lift $ lift $ modify (\(ShaderState a s) -> ShaderState a (f s))
 
+-- TODO Why an list of IO (Drawcall s)? <- for nothing???
 tellDrawcall :: IO (Drawcall s) -> ShaderM s ()
 tellDrawcall dc = ShaderM $ lift $ tell ([dc], mempty)
 
@@ -62,7 +63,7 @@ mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
 -- mapDrawcall f (Drawcall a b c d e g h i j k m) = Drawcall (a . f) b c d e g h i j k m
 mapDrawcall f dc = Drawcall{ drawcallFBO = drawcallFBO dc . f }
 
--- TODO Why an array of IO (Drawcall s)?
+-- TODO Why an list of IO (Drawcall s)?
 newtype ShaderM s a = ShaderM (ReaderT UniformAlignment (WriterT ([IO (Drawcall s)], s -> All) (ListT (State (ShaderState s)))) a) deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 
 -- | The monad in which all GPU computations are done. 'Shader os s a' lives in an object space 'os' and a context with format 'f', closing over an environent of type 's'.

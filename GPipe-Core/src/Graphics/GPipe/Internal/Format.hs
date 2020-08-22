@@ -8,7 +8,7 @@
 module Graphics.GPipe.Internal.Format where
 
 import Data.Word
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Foreign.Marshal.Array (withArray)
 import Linear.V4

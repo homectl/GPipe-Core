@@ -25,7 +25,7 @@ import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Control.Monad (when)
 import Data.Maybe (isJust)
 

@@ -20,7 +20,7 @@ import Graphics.GPipe.Internal.PrimitiveArray
 import Graphics.GPipe.Internal.PrimitiveStream
 import Graphics.GPipe.Internal.FragmentStream
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 
 import Data.Boolean
 import Data.IntMap.Lazy (insert)

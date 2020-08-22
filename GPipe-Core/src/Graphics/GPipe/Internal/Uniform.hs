@@ -15,7 +15,7 @@ import qualified Data.IntMap as Map
 import Data.IntMap.Lazy (insert)
 import Data.Word
 
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Data.IORef
 import Data.Int
 import Linear.V4

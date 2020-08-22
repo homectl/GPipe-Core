@@ -12,7 +12,7 @@ import Data.IORef
 
 import Data.Word
 
-import           Graphics.GL.Core33
+import           Graphics.GL.Core45
 import           Graphics.GL.Types
 
 -- | A vertex array is the basic building block for a primitive array. It is created from the contents of a 'Buffer', but unlike a 'Buffer',

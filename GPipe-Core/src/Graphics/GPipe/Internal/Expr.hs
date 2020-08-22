@@ -74,21 +74,24 @@ data ExprState = ExprState {
             (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevDecls2 prevS2
             return $ Drawcall _ _ _ vsource gsource fsource vinps vunis vsamps gunis gsamps funis fsamps _
 
-    The sN+1 expression obtained when evaluating a sN expression basically
-    contains the values transformed by the matching arrow (ToVertex, ToFragment...).
-    In this regard, the evaluation is the inverse arrow with the side effect of
-    outputting the shader source.
+    A sN expression's leafs are literals and input variables from the previous
+    shader (shaders are evaluated here in reverse order). Evaluationg a sN
+    expression produces a source and a sN+1 expression to be evaluated in the
+    previous shader. This sN+1 expression obtained when evaluating a sN
+    expression basically contains the values transformed by the matching arrow
+    (ToVertex, ToFragment...). In this regard, the evaluation is the inverse
+    arrow with the side effect of outputting the shader source.
 -}
 runExprM
     :: GlobDeclM () -- output declarations to include in this shader
     -> ExprM () -- expression to construct in this shader (including assignements to the output variables)
     -> IO
-        ( String -- shader source produced
-        , [Int] -- uniforms used in this shader
-        , [Int] -- samplers used in this shader
-        , [Int] -- (varying) inputs used in this shader
-        , GlobDeclM () -- output declarations required in the previous shader
-        , ExprM () -- expression to construct in the previous shader
+        ( String -- Shader source produced.
+        , [Int] -- Uniforms used in this shader.
+        , [Int] -- Samplers used in this shader.
+        , [Int] -- Inputs used in this shader (only varying or uniforms too?).
+        , GlobDeclM () -- Output declarations required in the previous shader (how it differs from the inputs used?).
+        , ExprM () -- Expression to construct in the previous shader.
         )
 runExprM d m = do
     (st, body) <- evalStateT (runWriterT (execStateT (runSNMapReaderT m) (ExprState Map.empty Map.empty Map.empty (Nothing, Nothing)))) 0

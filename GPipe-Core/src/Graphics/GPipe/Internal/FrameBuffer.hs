@@ -21,7 +21,7 @@ import           Graphics.GPipe.Internal.Texture
 
 import           Data.Word                               (Word)
 import           Foreign.Marshal.Utils
-import Graphics.GL.Core33
+import Graphics.GL.Core45
 import Graphics.GL.Types
 import Data.IORef
 import Foreign.Marshal.Alloc
@@ -158,7 +158,7 @@ tellDrawcalls (FragmentStream xs) f = do
 makeDrawcall ::
     ( ExprM () -- sh - shader
     , GlobDeclM () -- shd - shader declarations
-    , s -> (Either WinId (IO FBOKeys, IO ()), IO ()) -- wOrIo - where to draw, as a window ID or another mean with some IO?
+    , s -> (Either WinId (IO FBOKeys, IO ()), IO ()) -- wOrIo - where to draw, as a window ID or a FBO (only this second case seems to be used)
     )
     -> FragmentStreamData -> IO (Drawcall s)
 
@@ -370,7 +370,7 @@ clearImageColor i c = do (cwid, cd, doAsync) <- getLastRenderWin
                                                   glEnable GL_FRAMEBUFFER_SRGB
                                                   getImageBinding i GL_COLOR_ATTACHMENT0
                                                   withArray [GL_COLOR_ATTACHMENT0] $ glDrawBuffers 1
-                                                  getFBOerror
+                                                  getFboError
 
                          Render $ liftIO $ doAsync $ do
                                                    glDisable GL_SCISSOR_TEST
@@ -397,7 +397,7 @@ clearImageDepth i d = do (cwid, cd, doAsync) <- getLastRenderWin
                                                   glEnable GL_FRAMEBUFFER_SRGB
                                                   getImageBinding i GL_DEPTH_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                                                  getFBOerror
+                                                  getFboError
                          Render $ liftIO $ doAsync $ do
                                                    glDisable GL_SCISSOR_TEST
                                                    glDepthMask glTrue
@@ -423,7 +423,7 @@ clearImageStencil i s = do (cwid, cd, doAsync) <- getLastRenderWin
                                                   glEnable GL_FRAMEBUFFER_SRGB
                                                   getImageBinding i GL_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                                                  getFBOerror
+                                                  getFboError
                            Render $ liftIO $ doAsync $ do
                                                      glDisable GL_SCISSOR_TEST
                                                      glStencilMask maxBound
@@ -450,7 +450,7 @@ clearImageDepthStencil i d s = do
                                                   glEnable GL_FRAMEBUFFER_SRGB
                                                   getImageBinding i GL_DEPTH_STENCIL_ATTACHMENT
                                                   glDrawBuffers 0 nullPtr
-                                                  getFBOerror
+                                                  getFboError
                            Render $ liftIO $ doAsync $ do
                                                      glDisable GL_SCISSOR_TEST
                                                      glDepthMask glTrue
