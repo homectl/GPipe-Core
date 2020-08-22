@@ -165,9 +165,8 @@ safeGenerateDrawcalls protoDrawcalls = do
             , ["Too many textures used in a single shader program\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDrawcall]
             ]
 
-        -- TODO Clarify allocate (filter out identifiers >= max?)
-        allocatedUniforms = allocate maxUnis unisPerDrawcall
-        allocatedSamplers = allocate maxSamplers sampsPerDrawcall
+        allocatedUniforms = allocateConsecutiveIndexes maxUnis unisPerDrawcall
+        allocatedSamplers = allocateConsecutiveIndexes maxSamplers sampsPerDrawcall
     
     return (zip5 drawcalls unisPerDrawcall sampsPerDrawcall allocatedUniforms allocatedSamplers, limitErrors)
 
@@ -278,90 +277,90 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
-        rs <- lift $ lift get
-        renv <- lift ask
-        let (mFboKeyIO, blendIO) = fboSetup x
+            rs <- lift $ lift get
+            renv <- lift ask
+            let (mFboKeyIO, blendIO) = fboSetup x
 
-        let inwin windowId m = do
-            case Map.lookup windowId (perWindowRenderState rs) of
-                Nothing -> return () -- Window deleted
-                Just (ws, doAsync) -> do
-                    lift $ lift $ put (rs {renderLastUsedWin = windowId })
-                    mErr <- liftIO $ asSync doAsync $ do
-                        pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
-                        glUseProgram pName'
-                        True <- bind uNameToRenderIOMap' (zip unis ubinds) x (const $ return True)
-                        isOk <- bind (samplerNameToRenderIO s) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
-                        (rasterizationNameToRenderIO s ! rastN) x
-                        blendIO
-                        mErr2 <- m
-                        let mErr = if isOk
-                                then Nothing
-                                else Just $ "Running shader that samples from texture that currently has an image borrowed from it."
-                                    ++ "Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
-                        return $ mErr <> mErr2
-                    case mErr of
-                        Just e -> throwE e
-                        Nothing -> return ()
-        
-        -- Bind the framebuffer.
-        windowId <- case mFboKeyIO of
-            Left wid -> do -- Bind correct context
-                inwin wid $ do
-                    glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
-                    return Nothing
-                return wid
-            Right (fboKeyIO, fboIO) -> do
-                -- Off-screen draw call, continue with last context
-                -- (something wrong here?)
-                (cwid, cd, doAsync) <- unRender getLastRenderWin
-                inwin cwid $ do
-                    fbokey <- fboKeyIO
-                    mfbo <- getFBO cd fbokey
-                    case mfbo of
-                        Just fbo -> do
-                            fbo' <- readIORef fbo
-                            glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
-                            return Nothing
-                        Nothing -> do
-                            fbo' <- alloca $ \ ptr -> glGenFramebuffers 1 ptr >> peek ptr
-                            fbo <- newIORef fbo'
-                            void $ mkWeakIORef fbo (doAsync $ with fbo' $ glDeleteFramebuffers 1)
-                            setFBO cd fbokey fbo
-                            glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
-                            glEnable GL_FRAMEBUFFER_SRGB
-                            fboIO
-                            let numColors = length $ fboColors fbokey
-                            withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $
-                                glDrawBuffers (fromIntegral numColors)
-                            getFboError
-                return cwid
-
-        -- Draw each vertex array.
-        forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
-            case Map.lookup windowId (perWindowRenderState rs) of
-                Nothing -> return () -- Window deleted
-                Just (ws, doAsync) ->
-                    liftIO $ do
-                        let cd = windowContextData ws
-                        key <- keyIO
-                        mvao <- getVAO cd key
-                        case mvao of
-                            Just vao -> do
-                                vao' <- readIORef vao
-                                glBindVertexArray vao'
+            let inwin windowId m = do
+                    case Map.lookup windowId (perWindowRenderState rs) of
+                        Nothing -> return () -- Window deleted
+                        Just (ws, doAsync) -> do
+                            lift $ lift $ put (rs {renderLastUsedWin = windowId })
+                            mErr <- liftIO $ asSync doAsync $ do
+                                pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
+                                glUseProgram pName'
+                                True <- bind uNameToRenderIOMap' (zip unis ubinds) x (const $ return True)
+                                isOk <- bind (samplerNameToRenderIO s) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
+                                (rasterizationNameToRenderIO s ! rastN) x
+                                blendIO
+                                mErr2 <- m
+                                let mErr = if isOk
+                                        then Nothing
+                                        else Just $ "Running shader that samples from texture that currently has an image borrowed from it."
+                                            ++ "Try run this shader from a separate render call where no images from the same texture are drawn to or cleared.\n"
+                                return $ mErr <> mErr2
+                            case mErr of
+                                Just e -> throwE e
+                                Nothing -> return ()
+            
+            -- Bind the framebuffer.
+            windowId <- case mFboKeyIO of
+                Left wid -> do -- Bind correct context
+                    inwin wid $ do
+                        glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
+                        return Nothing
+                    return wid
+                Right (fboKeyIO, fboIO) -> do
+                    -- Off-screen draw call, continue with last context
+                    -- (something wrong here?)
+                    (cwid, cd, doAsync) <- unRender getLastRenderWin
+                    inwin cwid $ do
+                        fbokey <- fboKeyIO
+                        mfbo <- getFBO cd fbokey
+                        case mfbo of
+                            Just fbo -> do
+                                fbo' <- readIORef fbo
+                                glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                return Nothing
                             Nothing -> do
-                                vao' <- alloca $ \ ptr -> glGenVertexArrays 1 ptr >> peek ptr
-                                vao <- newIORef vao'
-                                void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
-                                setVAO cd key vao
-                                glBindVertexArray vao'
-                                vaoIO
-                        drawIO
+                                fbo' <- alloca $ \ ptr -> glGenFramebuffers 1 ptr >> peek ptr
+                                fbo <- newIORef fbo'
+                                void $ mkWeakIORef fbo (doAsync $ with fbo' $ glDeleteFramebuffers 1)
+                                setFBO cd fbokey fbo
+                                glBindFramebuffer GL_DRAW_FRAMEBUFFER fbo'
+                                glEnable GL_FRAMEBUFFER_SRGB
+                                fboIO
+                                let numColors = length $ fboColors fbokey
+                                withArray [GL_COLOR_ATTACHMENT0 .. (GL_COLOR_ATTACHMENT0 + fromIntegral numColors - 1)] $
+                                    glDrawBuffers (fromIntegral numColors)
+                                getFboError
+                    return cwid
+
+            -- Draw each vertex array.
+            forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
+                case Map.lookup windowId (perWindowRenderState rs) of
+                    Nothing -> return () -- Window deleted
+                    Just (ws, doAsync) ->
+                        liftIO $ do
+                            let cd = windowContextData ws
+                            key <- keyIO
+                            mvao <- getVAO cd key
+                            case mvao of
+                                Just vao -> do
+                                    vao' <- readIORef vao
+                                    glBindVertexArray vao'
+                                Nothing -> do
+                                    vao' <- alloca $ \ ptr -> glGenVertexArrays 1 ptr >> peek ptr
+                                    vao <- newIORef vao'
+                                    void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
+                                    setVAO cd key vao
+                                    glBindVertexArray vao'
+                                    vaoIO
+                            drawIO
     
     let deleter = do
-        glDeleteProgram pName
-        when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
+            glDeleteProgram pName
+            when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
 
     return ((pNameRef, deleter), renderer)
 
@@ -425,12 +424,14 @@ orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
 orderedUnion xs [] = xs
 orderedUnion [] ys = ys
 
-allocate :: Int -> [[Int]] -> [[Int]]
-allocate mx = allocate' Map.empty [] where
+oldAllocateWhichGiveStrangeResults :: Int -> [[Int]] -> [[Int]]
+oldAllocateWhichGiveStrangeResults mx = allocate' Map.empty [] where
     allocate' m ys ((x:xs):xss)
-        | Just a <- Map.lookup x m  = allocate' m (a:ys) (xs:xss)
+        | Just a <- Map.lookup x m = allocate' m (a:ys) (xs:xss)
         | ms <- Map.size m, ms < mx = allocate' (Map.insert x ms m) (ms:ys) (xs:xss)
-        | otherwise                 = let (ek,ev) = findLastUsed m mx (ys ++ xs ++ concat xss) in allocate' (Map.insert x ev (Map.delete ek m)) (ev:ys) (xs:xss)
+        | otherwise =
+            let (ek,ev) = findLastUsed m mx (ys ++ xs ++ concat xss)
+            in allocate' (Map.insert x ev (Map.delete ek m)) (ev:ys) (xs:xss)
     allocate' m ys (_:xss) = reverse ys : allocate' m [] xss
     allocate' _ _ [] = []
 
@@ -439,6 +440,30 @@ allocate mx = allocate' Map.empty [] where
             n' = if isJust a then n-1 else n
         in findLastUsed m' n' xs
     findLastUsed m _ _ = head $ Map.toList m
+
+{-
+Map the input values into [0, mx[ with no gap. Two different values in the
+input are mapped to two different values in the output as long as the `mx`
+size of the output set is no reach. The `mx+1` nth value and beyond are
+mapped to 0.
+
+Note that the fact that the values are stored in a list of lists doesn't
+matter, we are just mapping a tree of values to another without caring about
+the traversed structure.
+-}
+allocateConsecutiveIndexes :: Int -> [[Int]] -> [[Int]]
+allocateConsecutiveIndexes mx values = evalState (mapM (mapM allocateIndex) values) Map.empty where
+    allocateIndex n = do
+        mapping <- get
+        case Map.lookup n mapping of
+            Nothing -> do
+                let m = Map.size mapping
+                if m < mx
+                    then do
+                        put $ Map.insert n m mapping
+                        return m
+                    else return 0
+            Just m -> return m
 
 getFboError :: MonadIO m => m (Maybe String)
 getFboError = do
