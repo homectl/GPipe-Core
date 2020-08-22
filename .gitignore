@@ -3,8 +3,5 @@ dist
 dist-*
 .ghc.environment.*
 
-# Stack
-GPipe-Core/stack.yaml.lock
-
 # VS Code
 GPipe-Core/.vscode/
