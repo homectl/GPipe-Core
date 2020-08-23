@@ -32,21 +32,23 @@ import Data.Monoid ((<>))
 type WinId = Int
 
 -- A Drawcall is an OpenGL shader program with its context.
+-- It is intended to be "compiled" (sources compiles and linked into a program used by a render action).
 data Drawcall s = Drawcall
-    {   drawcallFBO :: s -> (Either WinId (IO FBOKeys, IO ()), IO ())
+    {   drawcallFbo :: s -> (Either WinId (IO FBOKeys, IO ()), IO ())
     ,   drawcallName :: Int
     ,   rasterizationName :: Int
+    -- Shader sources.
     ,   vertexsSource :: String
     ,   optionalGeometrySource :: Maybe String
     ,   fragmentSource :: String
+    -- Inputs.
     ,   usedInputs :: [Int]
-    ,   usedVUniforms :: [Int]
-    ,   usedVSamplers :: [Int]
-    ,   usedGUniforms :: [Int]
-    ,   usedGSamplers :: [Int]
-    ,   usedFUniforms :: [Int]
-    ,   usedFSamplers :: [Int]
-    ,   primStrUBufferSize :: Int -- The size of the ubuffer for uniforms in primitive stream
+    -- Uniforms and texture units used in each shader.
+    ,   usedVUniforms :: [Int],   usedVSamplers :: [Int]
+    ,   usedGUniforms :: [Int],   usedGSamplers :: [Int]
+    ,   usedFUniforms :: [Int],   usedFSamplers :: [Int]
+    -- The size of the ubuffer for uniforms in primitive stream.
+    ,   primStrUBufferSize :: Int
     }
 
 -- index/binding refers to what is used in the final shader. Index space is limited, usually 16
@@ -73,14 +75,12 @@ mapRenderIOState f (RenderIOState a b c d e) (RenderIOState i j k l m) =
     in  RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d) (Map.union m $ Map.map g e)
 
 -- | May throw a GPipeException
-compile :: (Monad m, MonadIO m, MonadException m, ContextHandler ctx)
+-- The multiple drawcalls to be compiled are intended to use the same environment 's' (and only one is selected dynamically when rendering).
+compileDrawcalls :: (Monad m, MonadIO m, MonadException m, ContextHandler ctx)
     => [IO (Drawcall s)] -- The proto drawcalls to generate and compile.
     -> RenderIOState s -- The current render (OpenGL) state.
     -> ContextT ctx os m (s -> Render os ()) -- The compiled drawcall (OpenGL program shader actually) as a function on a render (OpenGL) state.
-compile protoDrawcalls state = do
-
-    when (length protoDrawcalls /= 1) $
-        error "Is it really happening? See tellDrawcall in 'Shader.hs'."
+compileDrawcalls protoDrawcalls state = do
 
     (drawcalls, limitErrors) <- liftNonWinContextIO $ safeGenerateDrawcalls protoDrawcalls
     compilationResults <- liftNonWinContextIO $ mapM (innerCompile state) drawcalls
@@ -167,7 +167,7 @@ safeGenerateDrawcalls protoDrawcalls = do
 
         allocatedUniforms = allocateConsecutiveIndexes maxUnis unisPerDrawcall
         allocatedSamplers = allocateConsecutiveIndexes maxSamplers sampsPerDrawcall
-    
+
     return (zip5 drawcalls unisPerDrawcall sampsPerDrawcall allocatedUniforms allocatedSamplers, limitErrors)
 
 innerCompile :: RenderIOState s -- The current render (OpenGL) state.
@@ -181,7 +181,7 @@ innerCompile :: RenderIOState s -- The current render (OpenGL) state.
         ( Either
             String -- A failure in case the program cannot be compiled in linked.
             ( (IORef GLuint, IO ()) -- The program name and its destructor.
-            , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
+            , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state. Upper stage called this a 'CompiledShader'.
             )
         )
 innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
@@ -245,7 +245,7 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
         -- Right: the program wrapped in a Render monad.
         Right pName -> Right <$> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName
 
-createRenderer :: RenderIOState s -- The current OpenGL state.
+createRenderer :: RenderIOState s -- The current render (OpenGL) state.
     ->  ( Drawcall s -- A drawcall with:
         , [Int] -- its uniform buffers used,
         , [Int] -- its textures units used,
@@ -302,7 +302,7 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
                             case mErr of
                                 Just e -> throwE e
                                 Nothing -> return ()
-            
+
             -- Bind the framebuffer.
             windowId <- case mFboKeyIO of
                 Left wid -> do -- Bind correct context
@@ -357,7 +357,7 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
                                     glBindVertexArray vao'
                                     vaoIO
                             drawIO
-    
+
     let deleter = do
             glDeleteProgram pName
             when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
