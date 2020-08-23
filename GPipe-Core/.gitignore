@@ -1,11 +1,2 @@
-/.dist-buildwrapper
-
-/dist
-/bld.log
-
-/README.md
-
-cabal.sandbox.config
 .stack-work/
-dist/
-
+*.cabal

@@ -445,7 +445,7 @@ oldAllocateWhichGiveStrangeResults mx = allocate' Map.empty [] where
 Map the input values into [0, mx[ with no gap. Two different values in the
 input are mapped to two different values in the output as long as the `mx`
 size of the output set is no reach. The `mx+1` nth value and beyond are
-mapped to 0.
+mapped to… I can't figure it!. Let's just raise an error instead.
 
 Note that the fact that the values are stored in a list of lists doesn't
 matter, we are just mapping a tree of values to another without caring about
@@ -462,7 +462,7 @@ allocateConsecutiveIndexes mx values = evalState (mapM (mapM allocateIndex) valu
                     then do
                         put $ Map.insert n m mapping
                         return m
-                    else return 0
+                    else error "Not enough indexes available!"
             Just m -> return m
 
 getFboError :: MonadIO m => m (Maybe String)

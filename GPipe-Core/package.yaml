@@ -29,46 +29,53 @@ dependencies:
 
 library:
     source-dirs: src
-#    exposed-modules:
-#    - Graphics.GPipe
-#    - Graphics.GPipe.Buffer
-#    - Graphics.GPipe.Context
-#    - Graphics.GPipe.Expr
-#    - Graphics.GPipe.Format
-#    - Graphics.GPipe.FragmentStream
-#    - Graphics.GPipe.FrameBuffer
-#    - Graphics.GPipe.GeometryStream
-#    - Graphics.GPipe.PrimitiveArray
-#    - Graphics.GPipe.PrimitiveStream
-#    - Graphics.GPipe.Sampler
-#    - Graphics.GPipe.Shader
-#    - Graphics.GPipe.Texture
-#    - Graphics.GPipe.Uniform
-#    - Graphics.GPipe.Orphans
-#    other-modules:
-#    - Data.SNMap
-#    - Graphics.GPipe.Internal.Buffer
-#    - Graphics.GPipe.Internal.Compiler
-#    - Graphics.GPipe.Internal.Context
-#    - Graphics.GPipe.Internal.Expr
-#    - Graphics.GPipe.Internal.Format
-#    - Graphics.GPipe.Internal.FragmentStream
-#    - Graphics.GPipe.Internal.FrameBuffer
-#    - Graphics.GPipe.Internal.GeometryStream
-#    - Graphics.GPipe.Internal.PrimitiveArray
-#    - Graphics.GPipe.Internal.PrimitiveStream
-#    - Graphics.GPipe.Internal.Shader
-#    - Graphics.GPipe.Internal.Texture
-#    - Graphics.GPipe.Internal.TransformFeedback
-#    - Graphics.GPipe.Internal.Uniform
-#    - Graphics.GPipe.Internal.Orphans
+    exposed-modules:
+    - Graphics.GPipe
+    - Graphics.GPipe.Buffer
+    - Graphics.GPipe.Context
+    - Graphics.GPipe.Expr
+    - Graphics.GPipe.Format
+    - Graphics.GPipe.FragmentStream
+    - Graphics.GPipe.FrameBuffer
+    - Graphics.GPipe.GeometryStream
+    - Graphics.GPipe.PrimitiveArray
+    - Graphics.GPipe.PrimitiveStream
+    - Graphics.GPipe.Sampler
+    - Graphics.GPipe.Shader
+    - Graphics.GPipe.Texture
+    - Graphics.GPipe.Uniform
+    - Graphics.GPipe.Orphans
+    other-modules:
+    - Data.SNMap
+    - Graphics.GPipe.Internal.Buffer
+    - Graphics.GPipe.Internal.Compiler
+    - Graphics.GPipe.Internal.Context
+    - Graphics.GPipe.Internal.Expr
+    - Graphics.GPipe.Internal.Format
+    - Graphics.GPipe.Internal.FragmentStream
+    - Graphics.GPipe.Internal.FrameBuffer
+    - Graphics.GPipe.Internal.GeometryStream
+    - Graphics.GPipe.Internal.PrimitiveArray
+    - Graphics.GPipe.Internal.PrimitiveStream
+    - Graphics.GPipe.Internal.Shader
+    - Graphics.GPipe.Internal.Texture
+    - Graphics.GPipe.Internal.TransformFeedback
+    - Graphics.GPipe.Internal.Uniform
+    - Graphics.GPipe.Internal.Orphans
 
 tests:
-    GPipeTest:
-        main: Specs.hs
-        source-dirs: test
+    white-box:
+        main: WhiteBoxTestSuite.hs
+        source-dirs: src, test/internal
         dependencies:
-        - GPipe
         - HUnit
         - test-framework
         - test-framework-hunit
+#    black-box:
+#        main: Spec.hs
+#        source-dirs: src/exposed
+#        dependencies:
+#        - GPipe
+#        - HUnit
+#        - test-framework
+#        - test-framework-hunit
