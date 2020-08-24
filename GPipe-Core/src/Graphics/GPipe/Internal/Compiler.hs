@@ -31,8 +31,9 @@ import Data.Monoid ((<>))
 
 type WinId = Int
 
--- A Drawcall is an OpenGL shader program with its context.
--- It is intended to be "compiled" (sources compiles and linked into a program used by a render action).
+-- A Drawcall is an OpenGL shader program with its context. It is intended to be
+-- "compiled" (sources compiles and linked into a program used by a render
+-- action).
 data Drawcall s = Drawcall
     {   drawcallFbo :: s -> (Either WinId (IO FBOKeys, IO ()), IO ())
     ,   drawcallName :: Int
@@ -58,6 +59,12 @@ type Binding = Int
 -- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
 --       then create a function that checks that none of the input buffers are used as output, and throws if it is
 
+{- Contains the interactions between a GPipeShader and its environment. It is
+populated when creating a GPipeShader and queried when compiling it into a
+rendering action. In other words, it’s not a state at all, but some kind of
+environment connector or adaptor. It is simply called a state because it build
+using a State monad.
+-}
 data RenderIOState s = RenderIOState
     {   uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()) -- TODO Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
     ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int) -- IO returns texturename for validating that it isnt used as render target
@@ -78,8 +85,8 @@ mapRenderIOState f (RenderIOState a b c d e) (RenderIOState i j k l m) =
 -- The multiple drawcalls to be compiled are intended to use the same environment 's' (and only one is selected dynamically when rendering).
 compileDrawcalls :: (Monad m, MonadIO m, MonadException m, ContextHandler ctx)
     => [IO (Drawcall s)] -- The proto drawcalls to generate and compile.
-    -> RenderIOState s -- The current render (OpenGL) state.
-    -> ContextT ctx os m (s -> Render os ()) -- The compiled drawcall (OpenGL program shader actually) as a function on a render (OpenGL) state.
+    -> RenderIOState s -- Interactions between the drawcalls and the environment 's'.
+    -> ContextT ctx os m (s -> Render os ()) -- The compiled drawcall (OpenGL program shader actually) as a function on an environment.
 compileDrawcalls protoDrawcalls state = do
 
     (drawcalls, limitErrors) <- liftNonWinContextIO $ safeGenerateDrawcalls protoDrawcalls
@@ -170,7 +177,7 @@ safeGenerateDrawcalls protoDrawcalls = do
 
     return (zip5 drawcalls unisPerDrawcall sampsPerDrawcall allocatedUniforms allocatedSamplers, limitErrors)
 
-innerCompile :: RenderIOState s -- The current render (OpenGL) state.
+innerCompile :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
     ->  ( Drawcall s -- A drawcall with:
         , [Int] -- its uniform buffers used,
         , [Int] -- its textures units used,
@@ -191,17 +198,17 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
     errorOrProgramName <- do
         -- Compile the vertex shader.
         vShader <- glCreateShader GL_VERTEX_SHADER
-        mErrV <- innerCompileShader vShader vsource
+        mErrV <- compileOpenGlShader vShader vsource
         -- Compile the optional geometry shader.
         (ogShader, mErrG) <- case ogsource of
             Nothing -> return (Nothing, Nothing)
             Just gsource -> do
                 gShader <- glCreateShader GL_GEOMETRY_SHADER
-                mErrG <- innerCompileShader gShader gsource
+                mErrG <- compileOpenGlShader gShader gsource
                 return (Just gShader, mErrG)
         -- Compile the fragment shader.
         fShader <- glCreateShader GL_FRAGMENT_SHADER
-        mErrF <- innerCompileShader fShader fsource
+        mErrF <- compileOpenGlShader fShader fsource
 
         if all isNothing [mErrG, mErrV, mErrF]
             then do
@@ -245,7 +252,7 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
         -- Right: the program wrapped in a Render monad.
         Right pName -> Right <$> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName
 
-createRenderer :: RenderIOState s -- The current render (OpenGL) state.
+createRenderer :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
     ->  ( Drawcall s -- A drawcall with:
         , [Int] -- its uniform buffers used,
         , [Int] -- its textures units used,
@@ -256,7 +263,7 @@ createRenderer :: RenderIOState s -- The current render (OpenGL) state.
     ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
             )
-createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
+createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
     let Drawcall fboSetup primN rastN _ _ _ inputs _ _ _ _ _ _ pstrUSize' = drawcall
 
     let pstrUSize = if 0 `elem` unis then pstrUSize' else 0
@@ -272,7 +279,7 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
         glUniform1i six (fromIntegral bind)
     pNameRef <- newIORef pName
 
-    let uNameToRenderIOMap = uniformNameToRenderIO s
+    let uNameToRenderIOMap = uniformNameToRenderIO state
         uNameToRenderIOMap' = addPrimitiveStreamUniform pstrUBuf pstrUSize uNameToRenderIOMap
 
     -- Drawing with the program.
@@ -290,8 +297,8 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
                                 pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                                 glUseProgram pName'
                                 True <- bind uNameToRenderIOMap' (zip unis ubinds) x (const $ return True)
-                                isOk <- bind (samplerNameToRenderIO s) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
-                                (rasterizationNameToRenderIO s ! rastN) x
+                                isOk <- bind (samplerNameToRenderIO state) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
+                                (rasterizationNameToRenderIO state ! rastN) x
                                 blendIO
                                 mErr2 <- m
                                 let mErr = if isOk
@@ -337,7 +344,7 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
                     return cwid
 
             -- Draw each vertex array.
-            forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs s ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
+            forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs state ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
                 case Map.lookup windowId (perWindowRenderState rs) of
                     Nothing -> return () -- Window deleted
                     Just (ws, doAsync) ->
@@ -364,8 +371,8 @@ createRenderer s (drawcall, unis, ubinds, samps, sbinds) pName = do
 
     return ((pNameRef, deleter), renderer)
 
-innerCompileShader :: GLuint -> String -> IO (Maybe String)
-innerCompileShader name source = do
+compileOpenGlShader :: GLuint -> String -> IO (Maybe String)
+compileOpenGlShader name source = do
     withCStringLen source $ \ (ptr, len) ->
                                 with ptr $ \ pptr ->
                                     with (fromIntegral len) $ \ plen ->

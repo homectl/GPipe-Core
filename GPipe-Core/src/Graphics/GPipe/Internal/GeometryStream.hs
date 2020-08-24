@@ -246,7 +246,7 @@ instance AnotherVertexInput a => AnotherVertexInput (Plucker a) where
 
 geometrize :: forall p a s os f. GeometryInput p a => PrimitiveStream p a -> Shader os s (GeometryStream (Geometry p a))
 geometrize (PrimitiveStream xs) = Shader $ do
-        n <- getName
+        n <- getNewName
         modifyRenderIO (\s -> s { geometrizationNameToRenderIO = insert n io (geometrizationNameToRenderIO s) } )
         return (GeometryStream $ map f xs)
     where
@@ -394,7 +394,7 @@ generateAndRasterize :: forall p a s os f. (FragmentInputFromGeometry p a, Primi
         -> GeometryStream (GGenerativeGeometry p (VPos, a))
         -> Shader os s (FragmentStream (FragmentFormat a))
 generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
-        n <- getName
+        n <- getNewName
         modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )
         return (FragmentStream $ map (f n) xs)
     where

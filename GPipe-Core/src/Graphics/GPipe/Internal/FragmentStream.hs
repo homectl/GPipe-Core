@@ -64,7 +64,7 @@ rasterize:: forall p a s os f. FragmentInput a
           -> PrimitiveStream p (VPos, a)
           -> Shader os s (FragmentStream (FragmentFormat a))
 rasterize sf (PrimitiveStream xs) = Shader $ do
-        n <- getName
+        n <- getNewName
         modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )
         return (FragmentStream $ map (f n) xs)
     where

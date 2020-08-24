@@ -41,7 +41,7 @@ class BufferFormat a => UniformInput a where
 getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os s (UniformFormat b x)
 getUniform sf = Shader $ do
                    uniAl <- askUniformAlignment
-                   blockId <- getName
+                   blockId <- getNewName
                    let (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
                        sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform b)
                        shaderGen :: (Int -> ExprM String) -> (UniformFormat b x, OffsetToSType) -- Int is name of uniform block

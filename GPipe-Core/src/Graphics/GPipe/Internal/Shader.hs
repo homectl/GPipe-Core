@@ -8,7 +8,7 @@ module Graphics.GPipe.Internal.Shader (
     ShaderState(..),
     CompiledShader,
     Render(..),
-    getName,
+    getNewName,
     tellDrawcall,
     askUniformAlignment,
     modifyRenderIO,
@@ -45,9 +45,10 @@ import Data.List (find)
 
     Shader (with a majuscule) = "GPipeShader" => [(OpenGL program made of OpenGL shaders, condition)]
 
-    When a Shader is compiled, it means that it is translated into OpenGl shader sources (with a context)
-    which are compiled then linked in programs when wrapped into a rendering action which select the
-    appropriate shader at runtime.
+    When a Shader is compiled, it means that it is translated into OpenGl shader
+    sources (with a context) which are compiled then linked in programs when
+    wrapped into a rendering action which select the appropriate shader at
+    runtime.
 -}
 
 data ShaderState s = ShaderState
@@ -57,8 +58,9 @@ data ShaderState s = ShaderState
 newShaderState :: ShaderState s
 newShaderState = ShaderState 1 newRenderIOState
 
-getName :: ShaderM s Int
-getName = do
+-- Return a new name for a program, shader, uniform, texture unit (sampler), etc.
+getNewName :: ShaderM s Int
+getNewName = do
     ShaderState n r <- ShaderM $ lift $ lift $ lift get
     ShaderM $ lift $ lift $ lift $ put $ ShaderState (n+1) r
     return n
@@ -75,9 +77,10 @@ tellDrawcall dc = ShaderM $ lift $ tell ([dc], mempty)
 mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
 mapDrawcall f dc = dc{ drawcallFbo = drawcallFbo dc . f }
 
-{- The reason why there is a list of drawcalls instead of just one is the effective drawcall is dynamically selected
-on execution depending on the environment. That being said, this possibility is not used in GPipe (cf. tellDrawcall)…
-So what the point?
+{- The reason why there is a list of drawcalls instead of just one is the
+effective drawcall is dynamically selected on execution depending on the
+environment. That being said, this possibility is not used in GPipe (cf.
+tellDrawcall)… So what the point?
 -}
 newtype ShaderM s a = ShaderM (ReaderT UniformAlignment (WriterT ([IO (Drawcall s)], s -> All) (ListT (State (ShaderState s)))) a)
     deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
@@ -125,8 +128,9 @@ silenceShader (Shader (ShaderM m)) = Shader $ ShaderM $ do
         put s'
         return $ map (\ (a, (_, disc)) -> (a, ([], disc))) adcs
 
--- | A compiled shader is just a function that takes an environment and returns a 'Render' action
--- It could have been called 'CompiledDrawcall' or 'Renderer' because it is the same thing.
+-- | A compiled shader is just a function that takes an environment and returns
+-- a 'Render' action It could have been called 'CompiledDrawcall' or 'Renderer'
+-- because it is the same thing.
 type CompiledShader os s = s -> Render os ()
 
 -- | Compiles a shader into a 'CompiledShader'. This action will usually take a second or more, so put it during a loading sequence or something.

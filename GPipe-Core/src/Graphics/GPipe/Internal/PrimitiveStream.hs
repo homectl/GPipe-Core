@@ -93,14 +93,14 @@ toPrimitiveStream :: forall os f s a p. (PrimitiveTopology p, VertexInput a) => 
 toPrimitiveStream sf = Shader $ do
 
     -- Get a unique (OpenGL) name for this shader by updating the 'ShaderState' (a pair of the next name and a 'RenderIOState s') from the ReaderT/WriterT/ListM/State.
-    n <- getName
+    n <- getNewName
 
     -- Get the RO uniform alignment from the ReaderT
     uniAl <- askUniformAlignment
 
     -- The explosive input value is only here to ensure that the mf arrow is lazy.
     let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
-        -- Use 'mf' to 
+        -- Use 'mf' to
         (x, (_, uSize, offToStype)) = runReader
             (runStateT (mf err) (0, 0, mempty))
             (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream / Why a uniform here?
