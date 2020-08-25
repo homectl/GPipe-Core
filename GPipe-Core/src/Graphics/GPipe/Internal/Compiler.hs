@@ -29,11 +29,13 @@ import Data.List (zip5)
 import Data.Word
 import Data.Monoid ((<>))
 
+-- public
 type WinId = Int
 
 -- A Drawcall is an OpenGL shader program with its context. It is intended to be
--- "compiled" (sources compiles and linked into a program used by a render
+-- "compiled" (sources compiled and linked into a program used by a render
 -- action).
+-- public
 data Drawcall s = Drawcall
     {   drawcallFbo :: s -> (Either WinId (IO FBOKeys, IO ()), IO ())
     ,   drawcallName :: Int
@@ -52,8 +54,16 @@ data Drawcall s = Drawcall
     ,   primStrUBufferSize :: Int
     }
 
--- index/binding refers to what is used in the final shader. Index space is limited, usually 16
--- attribname is what was declared, but all might not be used. Attribname share namespace with uniforms and textures (in all shaders) and is unlimited(TM)
+-- public
+mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
+mapDrawcall f dc = dc{ drawcallFbo = drawcallFbo dc . f }
+
+-- index/binding refers to what is used in the final shader. Index space is
+-- limited, usually 16 attribname is what was declared, but all might not be
+-- used. Attribname share namespace with uniforms and textures (in all shaders)
+-- and is unlimited(TM)
+-- What? Contradiction.
+-- public
 type Binding = Int
 
 -- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
@@ -65,6 +75,7 @@ rendering action. In other words, it’s not a state at all, but some kind of
 environment connector or adaptor. It is simply called a state because it build
 using a State monad.
 -}
+-- public
 data RenderIOState s = RenderIOState
     {   uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()) -- TODO Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
     ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int) -- IO returns texturename for validating that it isnt used as render target
@@ -73,16 +84,20 @@ data RenderIOState s = RenderIOState
     ,   inputArrayToRenderIOs :: Map.IntMap (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())])
     }
 
+-- public
 newRenderIOState :: RenderIOState s
 newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty Map.empty
 
+-- Why 'map'? Wouldn’t 'inject' be a better name?
+-- public
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
-mapRenderIOState f (RenderIOState a b c d e) (RenderIOState i j k l m) =
-    let g x = x . f
-    in  RenderIOState (Map.union i $ Map.map g a) (Map.union j $ Map.map g b) (Map.union k $ Map.map g c) (Map.union l $ Map.map g d) (Map.union m $ Map.map g e)
+mapRenderIOState f (RenderIOState a' b' c' d' e') (RenderIOState a b c d e) =
+    let merge x x' = Map.union x $ Map.map (\ g -> g . f) x'
+    in  RenderIOState (merge a a') (merge b b') (merge c c') (merge d d') (merge e e')
 
 -- | May throw a GPipeException
 -- The multiple drawcalls to be compiled are intended to use the same environment 's' (and only one is selected dynamically when rendering).
+-- public
 compileDrawcalls :: (Monad m, MonadIO m, MonadException m, ContextHandler ctx)
     => [IO (Drawcall s)] -- The proto drawcalls to generate and compile.
     -> RenderIOState s -- Interactions between the drawcalls and the environment 's'.
@@ -114,6 +129,7 @@ compileDrawcalls protoDrawcalls state = do
 {- Generate the drawcalls (a single one each time in fact) and check their
 inputs don't exceed some OpenGL limits.
 -}
+-- private
 safeGenerateDrawcalls :: [IO (Drawcall s)] -- The proto drawcalls to generate.
     ->  IO (
         [   ( Drawcall s -- A generated drawcall.
@@ -177,6 +193,7 @@ safeGenerateDrawcalls protoDrawcalls = do
 
     return (zip5 drawcalls unisPerDrawcall sampsPerDrawcall allocatedUniforms allocatedSamplers, limitErrors)
 
+-- private
 innerCompile :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
     ->  ( Drawcall s -- A drawcall with:
         , [Int] -- its uniform buffers used,
@@ -252,6 +269,7 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
         -- Right: the program wrapped in a Render monad.
         Right pName -> Right <$> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName
 
+-- private
 createRenderer :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
     ->  ( Drawcall s -- A drawcall with:
         , [Int] -- its uniform buffers used,
@@ -371,6 +389,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
 
     return ((pNameRef, deleter), renderer)
 
+-- private
 compileOpenGlShader :: GLuint -> String -> IO (Maybe String)
 compileOpenGlShader name source = do
     withCStringLen source $ \ (ptr, len) ->
@@ -388,6 +407,7 @@ compileOpenGlShader name source = do
                 glGetShaderInfoLog name logLen nullPtr ptr
                 peekCString ptr
 
+-- private
 linkProgram :: GLuint -> IO (Maybe String)
 linkProgram name = do
     glLinkProgram name
@@ -401,6 +421,7 @@ linkProgram name = do
                 glGetProgramInfoLog name logLen nullPtr ptr
                 peekCString ptr
 
+-- private
 createUniformBuffer :: Integral a => a -> IO GLuint
 createUniformBuffer 0 = return undefined
 createUniformBuffer uSize = do
@@ -409,10 +430,12 @@ createUniformBuffer uSize = do
     glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW
     return bname
 
+-- private
 addPrimitiveStreamUniform :: Word32 -> Int -> Map.IntMap (s -> Binding -> IO ()) -> Map.IntMap (s -> Binding -> IO ())
 addPrimitiveStreamUniform _ 0 = id
 addPrimitiveStreamUniform bname uSize = Map.insert 0 $ \_ bind -> glBindBufferRange GL_UNIFORM_BUFFER (fromIntegral bind) bname 0 (fromIntegral uSize)
 
+-- private
 bind :: Map.IntMap (s -> Binding -> IO x)
     -> [(Int, Int)]
     -> s
@@ -424,6 +447,7 @@ bind iom ((n,b):xs) s a = do
     return $ ok1 && ok2
 bind _ [] _ _ = return True
 
+-- private
 orderedUnion :: Ord a => [a] -> [a] -> [a]
 orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
                                    | x < y     = x : orderedUnion xs yys
@@ -431,6 +455,7 @@ orderedUnion xxs@(x:xs) yys@(y:ys) | x == y    = x : orderedUnion xs ys
 orderedUnion xs [] = xs
 orderedUnion [] ys = ys
 
+-- private
 oldAllocateWhichGiveStrangeResults :: Int -> [[Int]] -> [[Int]]
 oldAllocateWhichGiveStrangeResults mx = allocate' Map.empty [] where
     allocate' m ys ((x:xs):xss)
@@ -458,6 +483,7 @@ Note that the fact that the values are stored in a list of lists doesn't
 matter, we are just mapping a tree of values to another without caring about
 the traversed structure.
 -}
+-- private
 allocateConsecutiveIndexes :: Int -> [[Int]] -> [[Int]]
 allocateConsecutiveIndexes mx values = evalState (mapM (mapM allocateIndex) values) Map.empty where
     allocateIndex n = do
@@ -472,6 +498,7 @@ allocateConsecutiveIndexes mx values = evalState (mapM (mapM allocateIndex) valu
                     else error "Not enough indexes available!"
             Just m -> return m
 
+-- public
 getFboError :: MonadIO m => m (Maybe String)
 getFboError = do
     status <- glCheckFramebufferStatus GL_DRAW_FRAMEBUFFER
@@ -481,5 +508,6 @@ getFboError = do
         _ -> error "GPipe internal FBO error"
 
 -- | A 'whenJust' that accepts a monoidal return value.
+-- private
 whenJust' :: (Monad m, Monoid b) => Maybe a -> (a -> m b) -> m b
 whenJust' = flip $ maybe (return mempty)
