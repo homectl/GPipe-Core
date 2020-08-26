@@ -61,7 +61,7 @@ newShaderState = ShaderState 1 newRenderIOState
 
 newtype ShaderM s a = ShaderM
     (ReaderT
-        UniformAlignment
+        UniformAlignment -- Meant to be retrieved using askUniformAlignment.
         (WriterT
             (   [IO (Drawcall s)] -- Produce a list of drawcalls (the IO is only here for SNMap)
             ,   s -> All -- Condition to execute the drawcalls.
@@ -98,13 +98,6 @@ tellDrawcall dc = ShaderM $ lift $ tell ([dc], mempty)
 newtype Shader os s a = Shader (ShaderM s a)
     deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 
-{- The following Shader manipulation functions: mapShader, maybeShader, guard',
-chooseShader and silenceShader are "static" and only introduce some kind of
-indirection before the final compilation. To dynamically select a CompiledShader
-when rendering, there is another mechanism… which doesn’t appear to be used (cf.
-tellDrawcall).
--}
-
 -- | Map the environment to a different environment and run a Shader in that sub
 -- environment, returning it's result.
 mapShader :: (s -> s') -> Shader os s' a -> Shader os s a
@@ -120,14 +113,6 @@ mapShader f (Shader (ShaderM m)) = Shader $ ShaderM $ do
 -- something.
 maybeShader :: (s -> Maybe s') -> Shader os s' () -> Shader os s ()
 maybeShader f m = (guard' (isJust . f) >> mapShader (fromJust . f) m) <|> guard' (isNothing . f)
-
--- | Like 'guard', but dependent on the 'Shaders' environment value. Since this
---   will be evaluated at shader run time, as opposed to shader compile time for
---   'guard', using this to do recursion will make 'compileShader' diverge. You
---   can break that divergence by combining it with a normal 'guard' and a
---   maximum loop count.
-guard' :: (s -> Bool) -> Shader os s ()
-guard' f = Shader $ ShaderM $ lift $ tell (mempty, All . f)
 
 -- | Select one of two 'Shader' actions based on whether an 'Either' value is
 -- 'Left' or 'Right'.
@@ -146,6 +131,14 @@ silenceShader (Shader (ShaderM m)) = Shader $ ShaderM $ do
         let (adcs, s') = runState (runListT (runWriterT (runReaderT m uniAl))) s
         put s'
         return $ map (\ (a, (_, disc)) -> (a, ([], disc))) adcs
+
+-- | Like 'guard', but dependent on the 'Shaders' environment value. Since this
+--   will be evaluated at shader run time, as opposed to shader compile time for
+--   'guard', using this to do recursion will make 'compileShader' diverge. You
+--   can break that divergence by combining it with a normal 'guard' and a
+--   maximum loop count.
+guard' :: (s -> Bool) -> Shader os s ()
+guard' f = Shader $ ShaderM $ lift $ tell (mempty, All . f)
 
 -- | A compiled shader is just a function that takes an environment and returns
 -- a 'Render' action It could have been called 'CompiledDrawcall' or 'Renderer'
