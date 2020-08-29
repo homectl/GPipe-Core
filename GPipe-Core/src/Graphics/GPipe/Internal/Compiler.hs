@@ -77,10 +77,16 @@ using a State monad.
 -}
 -- public
 data RenderIOState s = RenderIOState
-    {   uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()) -- TODO Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
+    {
+        -- Uniform buffer objects binding.
+        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()) -- TODO Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
+        -- Texture units binding.
     ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int) -- IO returns texturename for validating that it isnt used as render target
+        -- Final rasterization operations (mostly setting the viewport).
     ,   rasterizationNameToRenderIO :: Map.IntMap (s -> IO ())
+        -- Final geometrization operations (not really used).
     ,   geometrizationNameToRenderIO :: Map.IntMap (s -> IO ())
+        -- VAO binding.
     ,   inputArrayToRenderIOs :: Map.IntMap (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())])
     }
 

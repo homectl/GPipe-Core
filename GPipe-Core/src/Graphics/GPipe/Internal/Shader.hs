@@ -53,7 +53,7 @@ import Data.List (find)
 
 -- More a "GPipeShaderEnvironmentContextConnector".
 data ShaderState s = ShaderState
-    Int -- Next program name?
+    Int -- Next name.
     (RenderIOState s)
 
 newShaderState :: ShaderState s
@@ -64,9 +64,9 @@ newtype ShaderM s a = ShaderM
         UniformAlignment -- Meant to be retrieved using askUniformAlignment.
         (WriterT
             (   [IO (Drawcall s)] -- Produce a list of drawcalls (the IO is only here for SNMap)
-            ,   s -> All -- Condition to execute the drawcalls.
+            ,   s -> All -- Condition to execute the drawcalls (need to be a monoid such as the tuple could be too).
             )
-            (ListT -- TODO Change it (beside, why multiple states here?)
+            (ListT -- Needed to automatically derive MonadPlus and Application, but what else?
                 (State
                     (ShaderState s)
                 )
@@ -76,7 +76,9 @@ newtype ShaderM s a = ShaderM
     )
     deriving (MonadPlus, Monad, Alternative, Applicative, Functor)
 
--- Return a new name for a program, shader, uniform, texture unit (sampler), etc.
+-- Return a new name to be used as a key in RenderIOState. for a program,
+-- shader, uniform, texture unit (sampler)… or something not related to a named
+-- OpenGL object.
 getNewName :: ShaderM s Int
 getNewName = do
     ShaderState n r <- ShaderM $ lift $ lift $ lift get
@@ -90,7 +92,7 @@ modifyRenderIO :: (RenderIOState s -> RenderIOState s) -> ShaderM s ()
 modifyRenderIO f = ShaderM $ lift $ lift $ lift $ modify (\(ShaderState a s) -> ShaderState a (f s))
 
 tellDrawcall :: IO (Drawcall s) -> ShaderM s ()
-tellDrawcall dc = ShaderM $ lift $ tell ([dc], mempty)
+tellDrawcall drawcall = ShaderM $ lift $ tell ([drawcall], mempty)
 
 -- | The monad in which all GPU computations are done. 'Shader os s a' lives in
 -- an object space 'os' and a context with format 'f', closing over an
@@ -105,9 +107,9 @@ mapShader f (Shader (ShaderM m)) = Shader $ ShaderM $ do
     uniAl <- ask
     lift $ WriterT $ ListT $ do
         ShaderState x s <- get
-        let (adcs, ShaderState x' s') = runState (runListT (runWriterT (runReaderT m uniAl))) (ShaderState x newRenderIOState)
+        let (conditionalDrawcalls, ShaderState x' s') = runState (runListT (runWriterT (runReaderT m uniAl))) (ShaderState x newRenderIOState)
         put $ ShaderState x' (mapRenderIOState f s' s)
-        return $ map (\(a,(dcs, disc)) -> (a, (map (>>= (return . mapDrawcall f)) dcs, disc . f))) adcs
+        return $ map (\(a, (drawcalls, test)) -> (a, (map (>>= (return . mapDrawcall f)) drawcalls, test . f))) conditionalDrawcalls
 
 -- | Conditionally run the effects of a shader when a 'Maybe' value is 'Just'
 -- something.
@@ -128,9 +130,9 @@ silenceShader (Shader (ShaderM m)) = Shader $ ShaderM $ do
     uniAl <- ask
     lift $ WriterT $ ListT $ do
         s <- get
-        let (adcs, s') = runState (runListT (runWriterT (runReaderT m uniAl))) s
+        let (conditionalDrawcalls, s') = runState (runListT (runWriterT (runReaderT m uniAl))) s
         put s'
-        return $ map (\ (a, (_, disc)) -> (a, ([], disc))) adcs
+        return $ map (\ (a, (_, test)) -> (a, ([], test))) conditionalDrawcalls
 
 -- | Like 'guard', but dependent on the 'Shaders' environment value. Since this
 --   will be evaluated at shader run time, as opposed to shader compile time for
