@@ -28,7 +28,7 @@ tellTransformWithFeedbackCalls (GeometryStream xs) f = do
 tellTransformWithFeedbackCall :: IO (TransformWithFeedbackCall s) -> ShaderM s ()
 tellTransformWithFeedbackCall dc = undefined -- TODO in Shader.hs
 
--- forall os s a. 
+-- forall os s a.
 makeTransformWithFeedbackCall :: VertexInput a
     =>  ( ExprM () -- shaderExpression
         , GlobDeclM () -- outputShaderDeclarations
@@ -66,8 +66,8 @@ glDrawTransformFeedbackStreamInstanced
 
 data TransformWithFeedbackCall s = TransformWithFeedbackCall
     {   bufferRefName :: s -> Int
-    ,   drawcallName :: Int
-    ,   vertexsSource :: String
+    ,   primitiveName :: Int
+    ,   vertexSource :: String
     ,   optionalGeometrySource :: Maybe String
     ,   usedInputs :: [Int]
     ,   usedVUniforms :: [Int]

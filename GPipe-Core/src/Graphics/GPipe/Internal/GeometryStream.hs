@@ -36,6 +36,7 @@ import Linear.Affine (Point(..))
 ------------------------------------------------------------------------------------------------------------------------------------
 
 type LayoutName = String
+-- We don't store any « geometrizationName » because we have none (could be needed later).
 data GeometryStreamData = GeometryStreamData LayoutName PrimitiveStreamData
 
 newtype GeometryStream a = GeometryStream [(a, GeometryStreamData)] deriving (Semigroup, Monoid)
@@ -246,14 +247,12 @@ instance AnotherVertexInput a => AnotherVertexInput (Plucker a) where
 
 geometrize :: forall p a s os f. GeometryInput p a => PrimitiveStream p a -> Shader os s (GeometryStream (Geometry p a))
 geometrize (PrimitiveStream xs) = Shader $ do
-        n <- getNewName
-        modifyRenderIO (\s -> s { geometrizationNameToRenderIO = insert n io (geometrizationNameToRenderIO s) } )
+        -- We don't define any 'geometrizationNameToRenderIO' action because we don' neet do (maybe later for feedback?).
         return (GeometryStream $ map f xs)
     where
         ToGeometry (Kleisli m) = toGeometry :: ToGeometry a (Geometry p a)
         f :: (a, (Maybe PointSize, PrimitiveStreamData)) -> (Geometry p a, GeometryStreamData)
         f (x, (_, s)) = (evalState (m x) (0, 0), GeometryStreamData (toLayoutIn (undefined :: p)) s)
-        io = return $ return ()
 
 ------------------------------------------------------------------------------------------------------------------------------------
 

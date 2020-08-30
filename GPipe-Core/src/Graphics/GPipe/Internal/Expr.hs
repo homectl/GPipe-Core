@@ -108,7 +108,7 @@ runExprM d m = do
             sequence_ sampDecls
             sequence_ inpDecls
         source = mconcat
-            [ "#version 330\n"
+            [ "#version 450\n"
             , execWriter decls
             , "void main() {\n"
             , body
@@ -124,15 +124,18 @@ scalarS :: SType -> ExprM RValue -> S c a
 scalarS typ = S . tellAssignment typ
 
 vec2S :: SType -> ExprM RValue -> V2 (S c a)
-vec2S typ s = let V4 x y _z _w = vec4S typ s
-              in V2 x y
+vec2S typ s =
+    let V4 x y _z _w = vec4S typ s
+    in  V2 x y
 vec3S :: SType -> ExprM RValue -> V3 (S c a)
-vec3S typ s = let V4 x y z _w = vec4S typ s
-              in V3 x y z
+vec3S typ s =
+    let V4 x y z _w = vec4S typ s
+    in  V3 x y z
 vec4S :: SType -> ExprM RValue -> V4 (S c a)
-vec4S typ s = let m = tellAssignment typ s
-                  f p = S $ fmap (++ p) m
-              in V4 (f ".x") (f ".y") (f ".z") (f ".w")
+vec4S typ s =
+    let m = tellAssignment typ s
+        f p = S $ fmap (++ p) m
+    in  V4 (f ".x") (f ".y") (f ".z") (f ".w")
 
 scalarS' :: RValue -> S c a
 scalarS' = S . return
@@ -147,15 +150,15 @@ vec4S' = vec4S'' . S . return
 vec2S'' :: S c a -> V2 (S c a)
 vec2S'' s =
     let V4 x y _z _w = vec4S'' s
-    in V2 x y
+    in  V2 x y
 vec3S'' :: S c a -> V3 (S c a)
 vec3S'' s =
     let V4 x y z _w = vec4S'' s
-    in V3 x y z
+    in  V3 x y z
 vec4S'' :: S c a -> V4 (S c a)
 vec4S'' s =
     let f p = S $ fmap (++ ('[': show (p :: Int) ++"]")) (unS s)
-    in V4 (f 0) (f 1) (f 2) (f 3)
+    in  V4 (f 0) (f 1) (f 2) (f 3)
 
 -- | Phantom type used as first argument in @'S' 'V' a@ that denotes that the shader value is a vertex value
 data V
@@ -551,7 +554,7 @@ while c f i = fromBase x $ while_ (c . fromBase x) (toBase x . f . fromBase x) (
                         tellAssignment' boolDecl loopedBoolStr
                     T.lift $ T.lift $ tell "}\n"
                     return decls
-            in evalState (runReaderT (shaderbaseReturn (toBase x (errShaderType :: a))) whileM) 0
+            in  evalState (runReaderT (shaderbaseReturn (toBase x (errShaderType :: a))) whileM) 0
 
 errShaderType = error "toBase in an instance of ShaderType is not lazy enough! Make sure you use tilde (~) for each pattern match on a data constructor."
 
@@ -856,8 +859,7 @@ class (IfB a, OrdB a, Floating a) => FloatingOrd a where
   clamp x a = minB (maxB x a)
   saturate x = clamp x 0 1
   step a x = ifB (x <* a) 0 1
-  smoothstep a b x = let t = saturate ((x-a) / (b-a))
-                     in t*t*(3-2*t)
+  smoothstep a b x = let t = saturate ((x-a) / (b-a)) in t*t*(3-2*t)
 
 instance FloatingOrd Float
 instance FloatingOrd Double

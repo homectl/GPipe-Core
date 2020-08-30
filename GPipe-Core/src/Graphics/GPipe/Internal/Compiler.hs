@@ -37,20 +37,28 @@ type WinId = Int
 -- action).
 -- public
 data Drawcall s = Drawcall
-    {   drawcallFbo :: s -> (Either WinId (IO FBOKeys, IO ()), IO ())
-    ,   drawcallName :: Int
+    {   drawcallFbo :: s ->
+        (   Either WinId
+                (   IO FBOKeys
+                ,   IO ()
+                )
+        ,   IO ()
+        )
+        -- Key for RenderIOState::inputArrayToRenderIOs.
+    ,   primitiveName :: Int
+        -- Key for RenderIOState::rasterizationNameToRenderIO.
     ,   rasterizationName :: Int
-    -- Shader sources.
-    ,   vertexsSource :: String
+        -- Shader sources.
+    ,   vertexSource :: String
     ,   optionalGeometrySource :: Maybe String
-    ,   fragmentSource :: String
-    -- Inputs.
+    ,   fragmentSource :: String -- TODO Make it optional along with drawcallFbo?
+        -- Inputs.
     ,   usedInputs :: [Int]
-    -- Uniforms and texture units used in each shader.
+        -- Uniforms and texture units used in each shader.
     ,   usedVUniforms :: [Int],   usedVSamplers :: [Int]
     ,   usedGUniforms :: [Int],   usedGSamplers :: [Int]
     ,   usedFUniforms :: [Int],   usedFSamplers :: [Int]
-    -- The size of the ubuffer for uniforms in primitive stream.
+        -- The size of the uniform buffer for the primitive stream (see USize in PrimitiveStream data).
     ,   primStrUBufferSize :: Int
     }
 
@@ -63,11 +71,13 @@ mapDrawcall f dc = dc{ drawcallFbo = drawcallFbo dc . f }
 -- used. Attribname share namespace with uniforms and textures (in all shaders)
 -- and is unlimited(TM)
 -- What? Contradiction.
+-- Should be used elsewhere instead of Int (of are they pre-alloc Int?).
 -- public
 type Binding = Int
 
--- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO (), Int)) and the like
---       then create a function that checks that none of the input buffers are used as output, and throws if it is
+-- TODO: Add usedBuffers to RenderIOState, ie Map.IntMap (s -> (Binding -> IO
+--       (), Int)) and the like then create a function that checks that none of
+--       the input buffers are used as output, and throws if it is
 
 {- Contains the interactions between a GPipeShader and its environment. It is
 populated when creating a GPipeShader and queried when compiling it into a
@@ -77,29 +87,39 @@ using a State monad.
 -}
 -- public
 data RenderIOState s = RenderIOState
-    {
-        -- Uniform buffer objects binding.
-        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ()) -- TODO Return buffer name here when we start writing to buffers during rendering (transform feedback, buffer textures)
-        -- Texture units binding.
-    ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int) -- IO returns texturename for validating that it isnt used as render target
+    {   -- Uniform buffer objects bindings. TODO Return buffer name here when we
+        -- start writing to buffers during rendering (transform feedback, buffer
+        -- textures) -> Ok, but uniform only?
+        uniformNameToRenderIO :: Map.IntMap (s -> Binding -> IO ())
+        -- Texture units bindings. IO returns texturename for validating that it
+        -- isnt used as render target
+    ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int)
         -- Final rasterization operations (mostly setting the viewport).
     ,   rasterizationNameToRenderIO :: Map.IntMap (s -> IO ())
-        -- Final geometrization operations (not really used).
-    ,   geometrizationNameToRenderIO :: Map.IntMap (s -> IO ())
-        -- VAO binding.
-    ,   inputArrayToRenderIOs :: Map.IntMap (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())])
+        -- VAO bindings.
+    ,   inputArrayToRenderIO :: Map.IntMap (s ->
+        [   (   [Binding] -- inputs (drawcall's usedInputs)
+            ,   GLuint -- primitive stream uniforms buffer
+            ,   Int -- primitive stream uniforms buffer size
+            ) ->
+            (   (   IO [VAOKey] -- VAO names?
+                ,   IO () -- To bind the VAO?
+                )
+            ,   IO () -- To draw with it.
+            )
+        ])
     }
 
 -- public
 newRenderIOState :: RenderIOState s
-newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty Map.empty
+newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
 
 -- Why 'map'? Wouldn’t 'inject' be a better name?
 -- public
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
-mapRenderIOState f (RenderIOState a' b' c' d' e') (RenderIOState a b c d e) =
+mapRenderIOState f (RenderIOState a' b' c' d') (RenderIOState a b c d) =
     let merge x x' = Map.union x $ Map.map (\ g -> g . f) x'
-    in  RenderIOState (merge a a') (merge b b') (merge c c') (merge d d') (merge e e')
+    in  RenderIOState (merge a a') (merge b b') (merge c c') (merge d d')
 
 -- | May throw a GPipeException
 -- The multiple drawcalls to be compiled are intended to use the same environment 's' (and only one is selected dynamically when rendering).
@@ -138,12 +158,13 @@ inputs don't exceed some OpenGL limits.
 -- private
 safeGenerateDrawcalls :: [IO (Drawcall s)] -- The proto drawcalls to generate.
     ->  IO (
-        [   ( Drawcall s -- A generated drawcall.
-            , [Int] -- Its uniform buffers used.
-            , [Int] -- Its textures units used.
-            , [Int] -- Its allocated uniforms.
-            , [Int] -- Its allocated texture units.
-            )]
+        [   (   Drawcall s -- A generated drawcall.
+            ,   [Int] -- Its uniform buffers used.
+            ,   [Int] -- Its textures units used.
+            ,   [Int] -- Its allocated uniforms.
+            ,   [Int] -- Its allocated texture units.
+            )
+        ]
         , [String] -- The raised errors regarding exceeded limits.
         )
 safeGenerateDrawcalls protoDrawcalls = do
@@ -215,7 +236,7 @@ innerCompile :: RenderIOState s -- Interactions between the drawcall and the env
             )
         )
 innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
-    let Drawcall fboSetup primN rastN vsource ogsource fsource inputs _ _ _ _ _ _ pstrUSize = drawcall
+    let Drawcall _ _ _ vsource ogsource fsource inputs _ _ _ _ _ _ _ = drawcall
 
     -- Compile and link the shader program.
     errorOrProgramName <- do
@@ -288,10 +309,10 @@ createRenderer :: RenderIOState s -- Interactions between the drawcall and the e
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
             )
 createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
-    let Drawcall fboSetup primN rastN _ _ _ inputs _ _ _ _ _ _ pstrUSize' = drawcall
+    let Drawcall fboSetup primN rastN _ _ _ inputs _ _ _ _ _ _ pstrUSize = drawcall
 
-    let pstrUSize = if 0 `elem` unis then pstrUSize' else 0
-    pstrUBuf <- createUniformBuffer pstrUSize -- Create uniform buffer for primiveStream uniforms
+    let pstrUSize' = if 0 `elem` unis then pstrUSize else 0
+    pstrUBuf <- createUniformBuffer pstrUSize' -- Create uniform buffer for primiveStream uniforms
 
     forM_ (zip unis ubinds) $ \(name, bind) -> do
         uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
@@ -304,7 +325,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
     pNameRef <- newIORef pName
 
     let uNameToRenderIOMap = uniformNameToRenderIO state
-        uNameToRenderIOMap' = addPrimitiveStreamUniform pstrUBuf pstrUSize uNameToRenderIOMap
+        uNameToRenderIOMap' = addPrimitiveStreamUniform pstrUBuf pstrUSize' uNameToRenderIOMap
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
@@ -368,7 +389,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
                     return cwid
 
             -- Draw each vertex array.
-            forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIOs state ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
+            forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIO state ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> do
                 case Map.lookup windowId (perWindowRenderState rs) of
                     Nothing -> return () -- Window deleted
                     Just (ws, doAsync) ->

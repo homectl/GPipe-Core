@@ -42,12 +42,32 @@ import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 import Data.Maybe (fromMaybe)
 
-type DrawCallName = Int
-type USize = Int
-data PrimitiveStreamData = PrimitiveStreamData DrawCallName USize
+import qualified Debug.Trace as Trace
+import Data.List (intercalate)
 
--- TODO Should be renamed as VertexStream. I don’t need why 't' is carried alongside but it is now required for adding Geometry shaders.
--- | A @'PrimitiveStream' t a @ is a stream of primitives of type @t@ where the vertices are values of type @a@. You
+trace :: Show a => String -> a -> a
+trace t a = Trace.trace (t ++ " = " ++ show a) a
+
+traceList :: Show a => String -> [a] -> [a]
+traceList t as = Trace.trace (t ++ " = [\n\t" ++ intercalate "\n\t" (map show as) ++ "\n]") as
+
+-- Originally named DrawCallName and later in the code as PrimN. I've sticked
+-- with the latter, because it's more logical.
+type PrimitiveName = Int
+
+-- The size of the special uniform buffer object used for uniform inputs No such
+-- buffer is allocated if not used and it is only used when literal values are
+-- used in a primitive stream transmitted using a dedicated uniform buffer
+-- object.
+type USize = Int
+
+data PrimitiveStreamData = PrimitiveStreamData PrimitiveName USize
+
+-- Should be renamed as VertexStream. There a reason why the underlying VAO
+-- behind. Beside, it forces me to name GeometryStream the real PrimitiveStream.
+-- I don’t need why 't' was carried alongside but it is now required for adding
+-- Geometry shaders. | A @'PrimitiveStream' t a @ is a stream of primitives of
+-- type @t@ where the vertices are values of type @a@. You
 --   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).
 --   You may also append 'PrimitiveStream's using the 'Monoid' instance, but if possible append the origin 'PrimitiveArray's instead, as this will create more optimized
 --   draw calls.
@@ -71,9 +91,13 @@ type UniOffset = Int
 
 -- | The arrow type for 'toVertex'.
 data ToVertex a b = ToVertex
-    !(Kleisli (StateT (Ptr ()) IO) a b) -- ^ For transform feedback?
-    !(Kleisli (StateT (Int, UniOffset, OffsetToSType) (Reader (Int -> ExprM String))) a b) -- ^ To declare the input variable in the shader. (Int -> ExprM String) could be rewritten as (UniOffset -> ExprM String).
-    !(Kleisli (State [Binding -> (IO VAOKey, IO ())]) a b) -- ^ To bind the VAO when executing (or simply compiling, I can’t remember) the shader.
+    -- To set the uniform buffer content (for the literal values, not the one buffered).
+    !(Kleisli (StateT (Ptr ()) IO) a b)
+    -- To create (and declare) the input variable in the shader.
+    -- (Int -> ExprM String) could be rewritten as (UniOffset -> ExprM String).
+    !(Kleisli (StateT (Int, UniOffset, OffsetToSType) (Reader (Int -> ExprM String))) a b)
+    -- To construct the VAO for the vertex buffer.
+    !(Kleisli (State [Binding -> (IO VAOKey, IO ())]) a b)
 
 instance Category ToVertex where
     {-# INLINE id #-}
@@ -96,14 +120,13 @@ toPrimitiveStream sf = Shader $ do
     n <- getNewName
 
     -- Get the RO uniform alignment from the ReaderT
-    uniAl <- askUniformAlignment
+    uniAl <- askUniformAlignment -- uniAl is not used around…
 
     -- The explosive input value is only here to ensure that the mf arrow is lazy.
     let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
-        -- Use 'mf' to
         (x, (_, uSize, offToStype)) = runReader
-            (runStateT (mf err) (0, 0, mempty))
-            (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream / Why a uniform here?
+            (runStateT (makeV err) (0, 0, mempty))
+            (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
 
     -- Register the actual OpenGL bind and draw commands for this shader name.
     doForInputArray n (map drawcall . getPrimitiveArray . sf)
@@ -112,9 +135,9 @@ toPrimitiveStream sf = Shader $ do
 
     where
         ToVertex
-            (Kleisli uWriter) -- Not clear...
-            (Kleisli mf) -- To declare the input variable in the shader.
-            (Kleisli bindingm) -- To bind the VAO when executing (or simply compiling, I can’t remember) the shader.
+            (Kleisli uWriter) -- To set the uniform content (for the literal values, not the one buffered).
+            (Kleisli makeV) -- To create (and declare) the input variable in the shader.
+            (Kleisli makeBind) -- To construct the VAO.
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
         drawcall (PrimitiveArraySimple p l s a) binds = (attribs a binds, glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
@@ -146,20 +169,20 @@ toPrimitiveStream sf = Shader $ do
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
 
         attribs a (binds, uBname, uSize) = let
-                              (_,bindsAssoc) = runState (bindingm a) []
+                              (_,bindsAssoc) = runState (makeBind a) []
                               (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds $ reverse bindsAssoc
                           in (writeUBuffer uBname uSize a >> sequence ioVaokeys, sequence_ ios)
 
         -- Modify the (OpenGL) shader state which is the set of OpenGL commands to run to draw this this shader.
         doForInputArray :: Int -> (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
-        doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIOs = insert n io (inputArrayToRenderIOs s) } ) -- modifyRenderIO changes the ShaderState
+        doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIO = insert n io (inputArrayToRenderIO s) } ) -- modifyRenderIO changes the ShaderState
 
         writeUBuffer _ 0 _ = return () -- If the uniform buffer is size 0 there is no buffer
         writeUBuffer bname size a = do
-                       glBindBuffer GL_COPY_WRITE_BUFFER bname
-                       ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER 0 (fromIntegral size) (GL_MAP_WRITE_BIT + GL_MAP_INVALIDATE_BUFFER_BIT)
-                       void $ runStateT (uWriter a) ptr
-                       void $ glUnmapBuffer GL_COPY_WRITE_BUFFER
+            glBindBuffer GL_COPY_WRITE_BUFFER bname
+            ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER 0 (fromIntegral size) (GL_MAP_WRITE_BIT + GL_MAP_INVALIDATE_BUFFER_BIT)
+            void $ runStateT (uWriter a) ptr
+            void $ glUnmapBuffer GL_COPY_WRITE_BUFFER
 
 data InputIndices = InputIndices {
         inputVertexID :: VInt,
@@ -179,23 +202,25 @@ withPointSize f (PrimitiveStream xs) = PrimitiveStream $ map (\(a, (ps, d)) -> l
 
 -- Why x which is not needed?
 makeVertexF x f styp _ = do
-                     (n,uoffset,m) <- get
-                     put (n + 1, uoffset,m)
-                     return (f styp $ useVInput styp n)
+    (n, uoffset, m) <- get
+    put (n + 1, uoffset, m)
+    return (f styp $ useVInput styp n)
 
 append x = modify (x:)
 
 makeBindVertexFx norm x typ b = do
-                        let combOffset = bStride b * bSkipElems b + bOffset b
-                        append (\ix -> ( do bn <- readIORef $ bName b
-                                            return $ VAOKey bn combOffset x norm (bInstanceDiv b)
-                                     , do bn <- readIORef $ bName b
-                                          let ix' = fromIntegral ix
-                                          glEnableVertexAttribArray ix'
-                                          glBindBuffer GL_ARRAY_BUFFER bn
-                                          glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
-                                          glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset)))
-                        return undefined
+    let combOffset = bStride b * bSkipElems b + bOffset b
+    append (\ix ->
+        (   do  bn <- readIORef $ bName b
+                return $ VAOKey bn combOffset x norm (bInstanceDiv b)
+        ,   do  bn <- readIORef $ bName b
+                let ix' = fromIntegral ix
+                glEnableVertexAttribArray ix'
+                glBindBuffer GL_ARRAY_BUFFER bn
+                glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
+                glVertexAttribPointer ix' x typ (fromBool norm) (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))
+        )
+    return undefined
 
 makeBindVertexFnorm = makeBindVertexFx True
 makeBindVertexF = makeBindVertexFx False
@@ -218,20 +243,25 @@ makeBindVertexI x typ b = do
 noWriter = Kleisli (const $ return undefined)
 
 -- Uniform values
+-- Literal values seems to be allowed in a primitive stream, but will be
+-- provided using a dedicated uniform buffer object.
 
 toUniformVertex :: forall a b. Storable a => SType -> ToVertex a (S V b)
 toUniformVertex styp = ToVertex (Kleisli uWriter) (Kleisli makeV) (Kleisli makeBind)
     where
         size = sizeOf (undefined :: a)
-        uWriter a = do ptr <- get
-                       put (ptr `plusPtr` size)
-                       lift $ poke (castPtr ptr) a
-                       return undefined
-        makeV a = do (n, uoffset,m) <- get
-                     put (n, uoffset + size, Map.insert uoffset styp m)
-                     useF <- lift ask
-                     return $ S $ useF uoffset
-        makeBind a = return undefined
+        uWriter a = do
+            ptr <- get
+            put (ptr `plusPtr` size)
+            lift $ poke (castPtr ptr) a
+            return undefined
+        makeV a = do
+            (n, uoffset,m) <- get
+            put (n, uoffset + size, Map.insert uoffset styp m)
+            useF <- lift ask
+            return $ S $ useF uoffset
+        makeBind a =
+            return undefined
 
 instance VertexInput Float where
     type VertexFormat Float = VFloat

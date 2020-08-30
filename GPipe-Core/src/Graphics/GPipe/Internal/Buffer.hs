@@ -88,7 +88,10 @@ type Offset = Int
 type Stride = Int
 type BufferStartPos = Int
 
-data BInput = BInput {bInSkipElems :: Int, bInInstanceDiv :: Int}
+data BInput = BInput
+    {   bInSkipElems :: Int
+    ,   bInInstanceDiv :: Int
+    }
 
 type UniformAlignment = Int
 
@@ -122,7 +125,13 @@ instance Arrow ToBuffer where
     first (ToBuffer a b c m) = ToBuffer (first a) (first b) (first c) m
 
 -- | The atomic buffer value that represents a host value of type 'a'.
-data B a = B { bName :: IORef GLuint, bOffset :: Int, bStride :: Int, bSkipElems :: Int, bInstanceDiv :: Int}
+data B a = B
+    {   bName :: IORef GLuint
+    ,   bOffset :: Int
+    ,   bStride :: Int
+    ,   bSkipElems :: Int
+    ,   bInstanceDiv :: Int
+    }
 
 -- | An atomic buffer value that represents a vector of 2 'a's on the host.
 newtype B2 a = B2 { unB2 :: B a } -- Internal
