@@ -32,9 +32,11 @@ import Data.Monoid ((<>))
 -- public
 type WinId = Int
 
--- A Drawcall is an OpenGL shader program with its context. It is intended to be
--- "compiled" (sources compiled and linked into a program used by a render
--- action).
+{-
+A Drawcall is an OpenGL shader program with its context. Drawcalls are produced
+when evaluating a (GPipe) Shader and are intended to be "compiled" (sources
+compiled and linked into a program used by a render action).
+-}
 -- public
 data Drawcall s = Drawcall
     {   drawcallFbo :: s ->
@@ -96,6 +98,8 @@ data RenderIOState s = RenderIOState
     ,   samplerNameToRenderIO :: Map.IntMap (s -> Binding -> IO Int)
         -- Final rasterization operations (mostly setting the viewport).
     ,   rasterizationNameToRenderIO :: Map.IntMap (s -> IO ())
+        -- Final vertex processiong stage.
+    ,   feedbackTransformToRenderIO :: Map.IntMap (s -> IO ())
         -- VAO bindings.
     ,   inputArrayToRenderIO :: Map.IntMap (s ->
         [   (   [Binding] -- inputs (drawcall's usedInputs)
@@ -112,14 +116,14 @@ data RenderIOState s = RenderIOState
 
 -- public
 newRenderIOState :: RenderIOState s
-newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty
+newRenderIOState = RenderIOState Map.empty Map.empty Map.empty Map.empty Map.empty
 
 -- Why 'map'? Wouldn’t 'inject' be a better name?
 -- public
 mapRenderIOState :: (s -> s') -> RenderIOState s' -> RenderIOState s -> RenderIOState s
-mapRenderIOState f (RenderIOState a' b' c' d') (RenderIOState a b c d) =
+mapRenderIOState f (RenderIOState a' b' c' d' e') (RenderIOState a b c d e) =
     let merge x x' = Map.union x $ Map.map (\ g -> g . f) x'
-    in  RenderIOState (merge a a') (merge b b') (merge c c') (merge d d')
+    in  RenderIOState (merge a a') (merge b b') (merge c c') (merge d d') (merge e e')
 
 -- | May throw a GPipeException
 -- The multiple drawcalls to be compiled are intended to use the same environment 's' (and only one is selected dynamically when rendering).

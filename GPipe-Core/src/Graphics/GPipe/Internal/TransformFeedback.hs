@@ -17,6 +17,34 @@ import Graphics.GPipe.Internal.Texture
 import Graphics.GL.Core45
 import Graphics.GL.Types
 
+-- Add a transform feedback at the end of the vertex stage.
+withTransformFeedback :: forall p q a b os s. (PrimitiveTopology p, VertexInput a, PrimitiveTopology q, VertexInput b)
+    -- We should be to use a primitive (vertex) stream too, but the way we deal
+    -- currently with modular stage is not flexible enough and we stick with
+    -- geometry stream.
+    => GeometryStream (GGenerativeGeometry p (VPos, a))
+    -- Cherry picks what we want to collect in the feedback buffer.
+    -> (q, (VPos, a) -> b)
+    -- Output feedback buffers should remain black boxes until synchronized
+    -- which won't be necessary when using glDrawTransformFeedback (add a flag
+    -- for it?).
+    -> Buffer os b
+    -- Chaining another transform feedback with the returned stream is sound but
+    -- not allowed for now.
+    -> GeometryStream (GGenerativeGeometry p (VPos, a))
+withTransformFeedback = undefined
+
+-- Create a GPipeShader without rasterization stage, just for the sake of
+-- producing feedback.
+drawNothing :: forall p a os s. (PrimitiveTopology p, VertexInput a)
+    => GeometryStream (GGenerativeGeometry p (VPos, a))
+    -> Shader os s ()
+drawNothing = undefined
+
+{-
+withTransformFeedback :: (s -> Buffer os a) -> GeometryStream a -> GeometryStream b
+withTransformFeedback f (GeometryStream xs) = GeometryStream $ map (\(a, (ps, d)) -> let (b, ps') = f a (fromMaybe (scalarS' "1") ps) in (b, (Just ps', d))) xs
+
 tellTransformWithFeedbackCalls :: VertexInput a
     =>  GeometryStream a
     ->  (a -> (ExprM (), GlobDeclM (), s -> (Buffer os a)))
@@ -26,13 +54,13 @@ tellTransformWithFeedbackCalls (GeometryStream xs) f = do
     mapM_ g xs
 
 tellTransformWithFeedbackCall :: IO (TransformWithFeedbackCall s) -> ShaderM s ()
-tellTransformWithFeedbackCall dc = undefined -- TODO in Shader.hs
+tellTransformWithFeedbackCall fc = ShaderM $ lift $ tell ([fc], mempty)
 
 -- forall os s a.
 makeTransformWithFeedbackCall :: VertexInput a
     =>  ( ExprM () -- shaderExpression
         , GlobDeclM () -- outputShaderDeclarations
-        , s -> (Buffer os a) -- getBufferObject (only one, no interleaving)
+        , s -> Buffer os a -- getBufferObject (only one, no interleaving)
         )
     ->  GeometryStreamData -> IO (TransformWithFeedbackCall s)
 makeTransformWithFeedbackCall (shaderExpression, outputShaderDeclarations, getBufferObject) (GeometryStreamData layoutName (PrimitiveStreamData primitiveName uBufferSize)) = do
@@ -41,17 +69,10 @@ makeTransformWithFeedbackCall (shaderExpression, outputShaderDeclarations, getBu
     return $ TransformWithFeedbackCall (return aWayToRetrieveTheBufferRefName) primitiveName vSource (Just gSource) vInputs vUniforms vSamplers gUniforms gSamplers uBufferSize
 
 aWayToRetrieveTheBufferRefName = -1
+-}
 
 {-
-
-1 - Paramétriser Buffer pour mémoriser un contenu obtenu par feedback nécessitant de récupérer la taille au rendu.
-2 - Analyser en détail 'compile', (in Compiler.hs).
-3 - Exploiter la paramétrisation de Buffer dans 'compile'.
-4 - Dériver en un compileFeedback en se basant sur une factorisation ?
-
 void glTransformFeedbackVaryings(GLuint program​, GLsizei count​, const char **varyings​, GLenum bufferMode​=GL_INTERLEAVED_ATTRIBS);
-
-Note: il peut exister un fragment shader après le vertex stage concerné par le feedback.
 
 void glBeginTransformFeedback(GLenum primitiveMode​)
 void glPauseTransformFeedback()
@@ -63,19 +84,6 @@ glDrawTransformFeedbackInstanced
 glDrawTransformFeedbackStream
 glDrawTransformFeedbackStreamInstanced
 -}
-
-data TransformWithFeedbackCall s = TransformWithFeedbackCall
-    {   bufferRefName :: s -> Int
-    ,   primitiveName :: Int
-    ,   vertexSource :: String
-    ,   optionalGeometrySource :: Maybe String
-    ,   usedInputs :: [Int]
-    ,   usedVUniforms :: [Int]
-    ,   usedVSamplers :: [Int]
-    ,   usedGUniforms :: [Int]
-    ,   usedGSamplers :: [Int]
-    ,   primStrUBufferSize :: Int -- The size of the ubuffer for uniforms in primitive stream
-    }
 
 --------------------------------------------------------------------------------
 

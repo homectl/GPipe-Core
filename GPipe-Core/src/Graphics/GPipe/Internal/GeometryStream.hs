@@ -36,7 +36,10 @@ import Linear.Affine (Point(..))
 ------------------------------------------------------------------------------------------------------------------------------------
 
 type LayoutName = String
--- We don't store any « geometrizationName » because we have none (could be needed later).
+-- We don't store any « geometrizationName » because we have none (could be
+-- needed later, for transform feedback per instance). TODO Also add a (Maybe
+-- ExprPos) to hold the feedback buffer in any (ExprPos is not the right name
+-- here). The FragmentStreamData already has room for it.
 data GeometryStreamData = GeometryStreamData LayoutName PrimitiveStreamData
 
 newtype GeometryStream a = GeometryStream [(a, GeometryStreamData)] deriving (Semigroup, Monoid)

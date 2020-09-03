@@ -59,6 +59,16 @@ data ShaderState s = ShaderState
 newShaderState :: ShaderState s
 newShaderState = ShaderState 1 newRenderIOState
 
+{-
+I'm not a big fan of the ShaderM monad, because its important part is its side
+effects. A the end of the day, we always end up with a ShaderM os () and are
+only interested in the 'told' drawcalls with the 'put' ShaderState. When a
+ShaderM is not returning a () value, there are no drawcall (yet), the returned
+value is mostly a work in progress constructed and the context of the ShaderM is
+not really used (WriterT is not used in any cases). I'm probably talking outside
+my level of profiency here, but I suspect it would have been cleaner & clearer
+to separate the WriterT.
+-}
 newtype ShaderM s a = ShaderM
     (ReaderT
         UniformAlignment -- Meant to be retrieved using askUniformAlignment.
