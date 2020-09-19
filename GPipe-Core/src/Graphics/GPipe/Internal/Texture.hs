@@ -398,8 +398,8 @@ writeTexture1DFromBuffer t@(Texture1D texn _ ml) l x w b i
     | l < 0 || l >= ml = error "writeTexture1DFromBuffer, level out of bounds"
     | x < 0 || x >= mx = error "writeTexture1DFromBuffer, x out of bounds"
     | w < 0 || x+w > mx = error "writeTexture1DFromBuffer, w out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTexture1DFromBuffer, i out of bounds"
-    | bufferLength b - i < w = error "writeTexture1DFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTexture1DFromBuffer, i out of bounds"
+    | bufferLength' b - i < w = error "writeTexture1DFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_1D
                     bname <- readIORef $ bufName b
@@ -413,8 +413,8 @@ writeTexture1DArrayFromBuffer t@(Texture1DArray texn _ ml) l (V2 x y) (V2 w h) b
     | w < 0 || x+w > mx = error "writeTexture1DArrayFromBuffer, w out of bounds"
     | y < 0 || y >= my = error "writeTexture1DArrayFromBuffer, y out of bounds"
     | h < 0 || y+h > my = error "writeTexture1DArrayFromBuffer, h out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTexture1DArrayFromBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "writeTexture1DArrayFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTexture1DArrayFromBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "writeTexture1DArrayFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_1D_ARRAY
                     bname <- readIORef $ bufName b
@@ -428,8 +428,8 @@ writeTexture2DFromBuffer t@(Texture2D texn _ ml) l (V2 x y) (V2 w h) b i
     | w < 0 || x+w > mx = error "writeTexture2DFromBuffer, w out of bounds"
     | y < 0 || y >= my = error "writeTexture2DFromBuffer, y out of bounds"
     | h < 0 || y+h > my = error "writeTexture2DFromBuffer, h out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTexture2DFromBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTexture2DFromBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "writeTexture2DFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_2D
                     bname <- readIORef $ bufName b
@@ -445,8 +445,8 @@ writeTexture2DArrayFromBuffer t@(Texture2DArray texn _ ml) l (V3 x y z) (V3 w h 
     | h < 0 || y+h > my = error "writeTexture2DArrayFromBuffer, h out of bounds"
     | z < 0 || z >= mz = error "writeTexture2DArrayFromBuffer, z out of bounds"
     | d < 0 || z+d > mz = error "writeTexture2DArrayFromBuffer, d out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTexture2DArrayFromBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "writeTexture2DArrayFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTexture2DArrayFromBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "writeTexture2DArrayFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_2D_ARRAY
                     bname <- readIORef $ bufName b
@@ -462,8 +462,8 @@ writeTexture3DFromBuffer t@(Texture3D texn _ ml) l (V3 x y z) (V3 w h d) b i
     | h < 0 || y+h > my = error "writeTexture3DFromBuffer, h out of bounds"
     | z < 0 || z >= mz = error "writeTexture3DFromBuffer, z out of bounds"
     | d < 0 || z+d > mz = error "writeTexture3DFromBuffer, d out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTexture3DFromBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "writeTexture3DFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTexture3DFromBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "writeTexture3DFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_3D
                     bname <- readIORef $ bufName b
@@ -477,8 +477,8 @@ writeTextureCubeFromBuffer t@(TextureCube texn _ ml) l s (V2 x y) (V2 w h) b i
     | w < 0 || x+w > mxy = error "writeTextureCubeFromBuffer, w out of bounds"
     | y < 0 || y >= mxy = error "writeTextureCubeFromBuffer, y out of bounds"
     | h < 0 || y+h > mxy = error "writeTextureCubeFromBuffer, h out of bounds"
-    | i < 0 || i > bufferLength b = error "writeTextureCubeFromBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "writeTextureCubeFromBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "writeTextureCubeFromBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "writeTextureCubeFromBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                     useTexSync texn GL_TEXTURE_CUBE_MAP
                     bname <- readIORef $ bufName b
@@ -606,8 +606,8 @@ readTexture1DToBuffer t@(Texture1D texn _ ml) l x w b i
     | l < 0 || l >= ml = error "readTexture1DToBuffer, level out of bounds"
     | x < 0 || x >= mx = error "readTexture1DToBuffer, x out of bounds"
     | w < 0 || x+w > mx = error "readTexture1DToBuffer, w out of bounds"
-    | i < 0 || i > bufferLength b = error "readTexture1DToBuffer, i out of bounds"
-    | bufferLength b - i < w = error "readTexture1DToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTexture1DToBuffer, i out of bounds"
+    | bufferLength' b - i < w = error "readTexture1DToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      bname <- readIORef $ bufName b
                      glBindBuffer GL_PIXEL_PACK_BUFFER bname
@@ -621,8 +621,8 @@ readTexture1DArrayToBuffer t@(Texture1DArray texn _ ml) l (V2 x y) w b i
     | x < 0 || x >= mx = error "readTexture1DArrayToBuffer, x out of bounds"
     | w < 0 || x+w > mx = error "readTexture1DArrayToBuffer, w out of bounds"
     | y < 0 || y >= my = error "readTexture1DArrayToBuffer, y out of bounds"
-    | i < 0 || i > bufferLength b = error "readTexture1DArrayToBuffer, i out of bounds"
-    | bufferLength b - i < w = error "readTexture1DArrayToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTexture1DArrayToBuffer, i out of bounds"
+    | bufferLength' b - i < w = error "readTexture1DArrayToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      bname <- readIORef $ bufName b
                      glBindBuffer GL_PIXEL_PACK_BUFFER bname
@@ -637,8 +637,8 @@ readTexture2DToBuffer t@(Texture2D texn _ ml) l (V2 x y) (V2 w h) b i
     | w < 0 || x+w > mx = error "readTexture2DToBuffer, w out of bounds"
     | y < 0 || y >= my = error "readTexture2DToBuffer, y out of bounds"
     | h < 0 || y+h > my = error "readTexture2DToBuffer, h out of bounds"
-    | i < 0 || i > bufferLength b = error "readTexture2DToBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "readTexture2DToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTexture2DToBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "readTexture2DToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      bname <- readIORef $ bufName b
                      glBindBuffer GL_PIXEL_PACK_BUFFER bname
@@ -654,8 +654,8 @@ readTexture2DArrayToBuffer t@(Texture2DArray texn _ ml) l (V3 x y z) (V2 w h) b 
     | y < 0 || y >= my = error "readTexture2DArrayToBuffer, y out of bounds"
     | h < 0 || y+h > my = error "readTexture2DArrayToBuffer, h out of bounds"
     | z < 0 || z >= mz = error "readTexture2DArrayToBuffer, z out of bounds"
-    | i < 0 || i > bufferLength b = error "readTexture2DArrayToBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "readTexture2DArrayToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTexture2DArrayToBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "readTexture2DArrayToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      bname <- readIORef $ bufName b
                      glBindBuffer GL_PIXEL_PACK_BUFFER bname
@@ -671,8 +671,8 @@ readTexture3DToBuffer t@(Texture3D texn _ ml) l (V3 x y z) (V2 w h) b i
     | y < 0 || y >= my = error "readTexture3DToBuffer, y out of bounds"
     | h < 0 || y+h > my = error "readTexture3DToBuffer, h out of bounds"
     | z < 0 || z >= mz = error "readTexture3DToBuffer, z out of bounds"
-    | i < 0 || i > bufferLength b = error "readTexture3DToBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "readTexture3DToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTexture3DToBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "readTexture3DToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      bname <- readIORef $ bufName b
                      glBindBuffer GL_PIXEL_PACK_BUFFER bname
@@ -687,8 +687,8 @@ readTextureCubeToBuffer t@(TextureCube texn _ ml) l s (V2 x y) (V2 w h) b i
     | w < 0 || x+w > mxy = error "readTextureCubeToBuffer, w out of bounds"
     | y < 0 || y >= mxy = error "readTextureCubeToBuffer, y out of bounds"
     | h < 0 || y+h > mxy = error "readTextureCubeToBuffer, h out of bounds"
-    | i < 0 || i > bufferLength b = error "readTextureCubeToBuffer, i out of bounds"
-    | bufferLength b - i < w*h = error "readTextureCubeToBuffer, buffer data too small"
+    | i < 0 || i > bufferLength' b = error "readTextureCubeToBuffer, i out of bounds"
+    | bufferLength' b - i < w*h = error "readTextureCubeToBuffer, buffer data too small"
     | otherwise = liftNonWinContextAsyncIO $ do
                      setGlPixelStoreRange x y 0 w h
                      bname <- readIORef $ bufName b

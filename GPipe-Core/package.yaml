@@ -66,7 +66,9 @@ library:
 tests:
     white-box:
         main: WhiteBoxTestSuite.hs
-        source-dirs: src, test/internal
+        source-dirs:
+        - src
+        - test/internal
         dependencies:
         - HUnit
         - test-framework

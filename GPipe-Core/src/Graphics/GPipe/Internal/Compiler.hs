@@ -46,14 +46,15 @@ data Drawcall s = Drawcall
                 )
         ,   IO ()
         )
+    ,   feedbackBuffer :: Maybe GLuint
         -- Key for RenderIOState::inputArrayToRenderIOs.
     ,   primitiveName :: Int
         -- Key for RenderIOState::rasterizationNameToRenderIO.
-    ,   rasterizationName :: Int
+    ,   rasterizationName :: Maybe Int
         -- Shader sources.
     ,   vertexSource :: String
     ,   optionalGeometrySource :: Maybe String
-    ,   fragmentSource :: String -- TODO Make it optional along with drawcallFbo?
+    ,   optionalFragmentSource :: Maybe String
         -- Inputs.
     ,   usedInputs :: [Int]
         -- Uniforms and texture units used in each shader.
@@ -99,7 +100,7 @@ data RenderIOState s = RenderIOState
         -- Final rasterization operations (mostly setting the viewport).
     ,   rasterizationNameToRenderIO :: Map.IntMap (s -> IO ())
         -- Final vertex processiong stage.
-    ,   feedbackTransformToRenderIO :: Map.IntMap (s -> IO ())
+    ,   transformFeedbackToRenderIO :: Map.IntMap (s -> GLuint -> IO ())
         -- VAO bindings.
     ,   inputArrayToRenderIO :: Map.IntMap (s ->
         [   (   [Binding] -- inputs (drawcall's usedInputs)
@@ -240,7 +241,10 @@ innerCompile :: RenderIOState s -- Interactions between the drawcall and the env
             )
         )
 innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
-    let Drawcall _ _ _ vsource ogsource fsource inputs _ _ _ _ _ _ _ = drawcall
+    let vsource = vertexSource drawcall
+        ogsource = optionalGeometrySource drawcall
+        ofsource = optionalFragmentSource drawcall
+        inputs = usedInputs drawcall
 
     -- Compile and link the shader program.
     errorOrProgramName <- do
@@ -255,8 +259,12 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
                 mErrG <- compileOpenGlShader gShader gsource
                 return (Just gShader, mErrG)
         -- Compile the fragment shader.
-        fShader <- glCreateShader GL_FRAGMENT_SHADER
-        mErrF <- compileOpenGlShader fShader fsource
+        (ofShader, mErrF) <- case ofsource of
+            Nothing -> return (Nothing, Nothing)
+            Just fsource -> do
+                fShader <- glCreateShader GL_FRAGMENT_SHADER
+                mErrF <- compileOpenGlShader fShader fsource
+                return (Just fShader, mErrG)
 
         if all isNothing [mErrG, mErrV, mErrF]
             then do
@@ -264,33 +272,37 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
                 glAttachShader pName vShader
 
                 whenJust' ogShader $ glAttachShader pName
-                glAttachShader pName fShader
+                whenJust' ofShader $ glAttachShader pName
                 mapM_ (\(name, ix) -> withCString ("in"++ show name) $ glBindAttribLocation pName ix) $ zip inputs [0..]
 
                 mPErr <- linkProgram pName
 
                 glDetachShader pName vShader
                 whenJust' ogShader $ glDetachShader pName
-                glDetachShader pName fShader
+                whenJust' ofShader $ glDetachShader pName
 
                 glDeleteShader vShader
                 whenJust' ogShader $ glDeleteShader
-                glDeleteShader fShader
+                whenJust' ofShader $ glDeleteShader
 
                 case mPErr of
                     Just errP -> do
                         glDeleteProgram pName
-                        return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ "\nVertex source:\n" ++ vsource ++ "\nFragment source:\n" ++ fsource
+                        return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ concat
+                            [ maybe "" (\e -> "\nVertex source:\n" ++ e ++ "\nSource:\n" ++ e) (Just vsource)
+                            , maybe "" (\e -> "\nGeometry source:\n" ++ e ++ "\nSource:\n" ++ e) ogsource
+                            , maybe "" (\e -> "\nFragment source:\n" ++ e ++ "\nSource:\n" ++ e) ofsource
+                            ]
                     Nothing -> return $ Right pName
             else do
                 glDeleteShader vShader
                 whenJust' ogShader $ glDeleteShader
-                glDeleteShader fShader
+                whenJust' ofShader $ glDeleteShader
 
-                let err = concat $
+                let err = concat
                         [ maybe "" (\e -> "A vertex shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ vsource) mErrV
                         , maybe "" (\e -> "A geometry shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fromJust ogsource) mErrG
-                        , maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fsource) mErrF
+                        , maybe "" (\e -> "A fragment shader compilation failed:\n" ++ e ++ "\nSource:\n" ++ fromJust ofsource) mErrF
                         ]
                 return $ Left err
 
@@ -298,7 +310,10 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
         -- Left: the failure.
         Left err -> return $ Left err
         -- Right: the program wrapped in a Render monad.
-        Right pName -> Right <$> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName
+        Right pName -> Right <$> case (feedbackBuffer drawcall, rasterizationName drawcall) of
+            (Nothing, Just rastN) -> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN
+            (Just fbb, Just geoN) -> createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName fbb geoN
+            _ -> error "No rasterization nor feedback!"
 
 -- private
 createRenderer :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
@@ -309,11 +324,15 @@ createRenderer :: RenderIOState s -- Interactions between the drawcall and the e
         , [Int] -- its allocated texture units.
         )
     ->  GLuint -- pName
+    ->  Int
     ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
             )
-createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
-    let Drawcall fboSetup primN rastN _ _ _ inputs _ _ _ _ _ _ pstrUSize = drawcall
+createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
+    let fboSetup = drawcallFbo drawcall
+        primN = primitiveName drawcall
+        inputs = usedInputs drawcall
+        pstrUSize = primStrUBufferSize drawcall
 
     let pstrUSize' = if 0 `elem` unis then pstrUSize else 0
     pstrUBuf <- createUniformBuffer pstrUSize' -- Create uniform buffer for primiveStream uniforms
@@ -341,7 +360,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
                     case Map.lookup windowId (perWindowRenderState rs) of
                         Nothing -> return () -- Window deleted
                         Just (ws, doAsync) -> do
-                            lift $ lift $ put (rs {renderLastUsedWin = windowId })
+                            lift $ lift $ put (rs { renderLastUsedWin = windowId })
                             mErr <- liftIO $ asSync doAsync $ do
                                 pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                                 glUseProgram pName'
@@ -413,6 +432,87 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName = do
                                     glBindVertexArray vao'
                                     vaoIO
                             drawIO
+
+    let deleter = do
+            glDeleteProgram pName
+            when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
+
+    return ((pNameRef, deleter), renderer)
+
+-- private
+createFeedbackRenderer :: RenderIOState s -- Interactions between the drawcall and the environment 's'.
+    ->  ( Drawcall s -- A drawcall with:
+        , [Int] -- its uniform buffers used,
+        , [Int] -- its textures units used,
+        , [Int] -- its allocated uniforms,
+        , [Int] -- its allocated texture units.
+        )
+    ->  GLuint -- program name
+    ->  GLuint -- buffer name
+    ->  Int
+    ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
+            , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
+            )
+createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName geoN = do
+    let fboSetup = drawcallFbo drawcall
+        primN = primitiveName drawcall
+        inputs = usedInputs drawcall
+        pstrUSize = primStrUBufferSize drawcall
+
+    let pstrUSize' = if 0 `elem` unis then pstrUSize else 0
+    pstrUBuf <- createUniformBuffer pstrUSize' -- Create uniform buffer for primiveStream uniforms
+
+    forM_ (zip unis ubinds) $ \(name, bind) -> do
+        uix <- withCString ("uBlock" ++ show name) $ glGetUniformBlockIndex pName
+        glUniformBlockBinding pName uix (fromIntegral bind)
+
+    glUseProgram pName -- For setting texture uniforms
+    forM_ (zip samps sbinds) $ \(name, bind) -> do
+        six <- withCString ("s" ++ show name) $ glGetUniformLocation pName
+        glUniform1i six (fromIntegral bind)
+    pNameRef <- newIORef pName
+
+    let uNameToRenderIOMap = uniformNameToRenderIO state
+        uNameToRenderIOMap' = addPrimitiveStreamUniform pstrUBuf pstrUSize' uNameToRenderIOMap
+
+    -- Drawing with the program.
+    let renderer = \x -> Render $ do
+            rs <- lift $ lift get
+            renv <- lift ask
+            let (Left windowId, blendIO) = fboSetup x
+
+            case Map.lookup windowId (perWindowRenderState rs) of
+                Nothing -> return () -- Window deleted
+                Just (ws, doAsync) -> do
+                    lift $ lift $ put (rs { renderLastUsedWin = windowId })
+                    liftIO $ asSync doAsync $ do
+                        pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
+                        glUseProgram pName'
+                        (transformFeedbackToRenderIO state ! geoN) x pName'
+                        True <- bind uNameToRenderIOMap' (zip unis ubinds) x (const $ return True)
+                        isOk <- bind (samplerNameToRenderIO state) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
+                        blendIO
+
+                    -- Draw each vertex array.
+                    forM_ (map ($ (inputs, pstrUBuf, pstrUSize)) ((inputArrayToRenderIO state ! primN) x)) $ \ ((keyIO, vaoIO), drawIO) -> liftIO $ do
+                        let cd = windowContextData ws
+                        key <- keyIO
+                        mvao <- getVAO cd key
+                        case mvao of
+                            Just vao -> do
+                                vao' <- readIORef vao
+                                glBindVertexArray vao'
+                            Nothing -> do
+                                vao' <- alloca $ \ ptr -> glGenVertexArrays 1 ptr >> peek ptr
+                                vao <- newIORef vao'
+                                void $ mkWeakIORef vao (doAsync $ with vao' $ glDeleteVertexArrays 1)
+                                setVAO cd key vao
+                                glBindVertexArray vao'
+                                vaoIO
+                        glBindTransformFeedback GL_TRANSFORM_FEEDBACK bName
+                        glBeginTransformFeedback GL_TRIANGLES
+                        drawIO
+                        glEndTransformFeedback
 
     let deleter = do
             glDeleteProgram pName

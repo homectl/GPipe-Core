@@ -33,7 +33,7 @@ type VPos = V4 VFloat
 
 type ExprPos = ExprM ()
 type RasterizationName = Int
-data FragmentStreamData = FragmentStreamData RasterizationName (Maybe ExprPos) ExprPos PrimitiveStreamData FBool
+data FragmentStreamData = FragmentStreamData RasterizationName Bool ExprPos PrimitiveStreamData FBool
 
 -- | A @'FragmentStream' a @ is a stream of fragments of type @a@. You may append 'FragmentStream's using the 'Monoid' instance, and you
 --   can operate a stream's values using the 'Functor' instance (this will result in a shader running on the GPU).
@@ -69,7 +69,7 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
         return (FragmentStream $ map (f n) xs)
     where
         ToFragment (Kleisli m) = toFragment :: ToFragment a (FragmentFormat a)
-        f n ((p, x),(ps, s)) = (evalState (m x) 0, FragmentStreamData n Nothing (makePos p >> makePointSize ps) s true)
+        f n ((p, x),(ps, s)) = (evalState (m x) 0, FragmentStreamData n False (makePos p >> makePointSize ps) s true)
         makePos (V4 (S x) (S y) (S z) (S w)) = do
                                        x' <- x
                                        y' <- y

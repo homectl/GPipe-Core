@@ -53,7 +53,20 @@ stypeSize (STypeIVec n) = n * 4
 stypeSize (STypeUVec n) = n * 4
 stypeSize _ = 4
 
-type ExprM = SNMapReaderT [String] (StateT ExprState (WriterT String (StateT NextTempVar IO))) -- IO for stable names
+-- A functional shader expression.
+type ExprM = SNMapReaderT
+    [String] -- Cached GLSL source code.
+    (StateT
+        ExprState -- Shader inputs and outputs.
+        (WriterT
+            String -- Generated GLSL source code.
+            (StateT
+                NextTempVar
+                IO -- IO for stable names.
+            )
+        )
+    )
+
 data ExprState = ExprState
     {   shaderUsedUniformBlocks :: Map.IntMap (GlobDeclM ())
     ,   shaderUsedSamplers :: Map.IntMap (GlobDeclM ())

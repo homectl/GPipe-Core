@@ -140,14 +140,22 @@ toPrimitiveStream sf = Shader $ do
             (Kleisli makeBind) -- To construct the VAO.
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
-        drawcall (PrimitiveArraySimple p l s a) binds = (attribs a binds, glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
+        drawcall (PrimitiveArraySimple p Nothing s a) binds = (attribs a binds,
+            glDrawTransformFeedback (toGLtopology p) (fromIntegral s))
+        drawcall (PrimitiveArrayInstanced p (Just il) Nothing s a) binds = (attribs a binds,
+            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il))
+
+        drawcall (PrimitiveArraySimple p (Just l) s a) binds = (attribs a binds,
+            glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
         drawcall (PrimitiveArrayIndexed p i s a) binds = (attribs a binds, do
             bindIndexBuffer i
             glDrawElementsBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral s))
-        drawcall (PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, glDrawArraysInstanced (toGLtopology p) (fromIntegral s) (fromIntegral l) (fromIntegral il))
-        drawcall (PrimitiveArrayIndexedInstanced p i il s a) binds = (attribs a binds, do
+        drawcall (PrimitiveArrayInstanced p (Just il) (Just l) s a) binds = (attribs a binds,
+            glDrawArraysInstanced (toGLtopology p) (fromIntegral s) (fromIntegral l) (fromIntegral il))
+        drawcall (PrimitiveArrayIndexedInstanced p i (Just il) s a) binds = (attribs a binds, do
             bindIndexBuffer i
             glDrawElementsInstancedBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il) (fromIntegral s))
+
         bindIndexBuffer i = do
             case restart i of
                 Just x -> do

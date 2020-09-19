@@ -35,12 +35,11 @@ import Linear.Affine (Point(..))
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
+type GeometrizationName = Int
+
 type LayoutName = String
--- We don't store any « geometrizationName » because we have none (could be
--- needed later, for transform feedback per instance). TODO Also add a (Maybe
--- ExprPos) to hold the feedback buffer in any (ExprPos is not the right name
--- here). The FragmentStreamData already has room for it.
-data GeometryStreamData = GeometryStreamData LayoutName PrimitiveStreamData
+
+data GeometryStreamData = GeometryStreamData GeometrizationName LayoutName PrimitiveStreamData
 
 newtype GeometryStream a = GeometryStream [(a, GeometryStreamData)] deriving (Semigroup, Monoid)
 
@@ -250,12 +249,14 @@ instance AnotherVertexInput a => AnotherVertexInput (Plucker a) where
 
 geometrize :: forall p a s os f. GeometryInput p a => PrimitiveStream p a -> Shader os s (GeometryStream (Geometry p a))
 geometrize (PrimitiveStream xs) = Shader $ do
-        -- We don't define any 'geometrizationNameToRenderIO' action because we don' neet do (maybe later for feedback?).
-        return (GeometryStream $ map f xs)
+        n <- getNewName
+        modifyRenderIO (\s -> s { transformFeedbackToRenderIO = insert n io (transformFeedbackToRenderIO s) } )
+        return (GeometryStream $ map (f n) xs)
     where
         ToGeometry (Kleisli m) = toGeometry :: ToGeometry a (Geometry p a)
-        f :: (a, (Maybe PointSize, PrimitiveStreamData)) -> (Geometry p a, GeometryStreamData)
-        f (x, (_, s)) = (evalState (m x) (0, 0), GeometryStreamData (toLayoutIn (undefined :: p)) s)
+        f :: GeometrizationName -> (a, (Maybe PointSize, PrimitiveStreamData)) -> (Geometry p a, GeometryStreamData)
+        f n (x, (_, s)) = (evalState (m x) (0, 0), GeometryStreamData n (toLayoutIn (undefined :: p)) s)
+        io _ _ = return ()
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -292,6 +293,7 @@ endPrimitive g = S $ do
 
 class FragmentInput a => GeometryExplosive a where
     exploseGeometry :: a -> Int -> ExprM Int
+    enumerateVaryings :: a -> State Int [String]
 
 instance GeometryExplosive VFloat where
     exploseGeometry x n = do
@@ -299,6 +301,10 @@ instance GeometryExplosive VFloat where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance GeometryExplosive FlatVFloat where
     exploseGeometry x n = do
@@ -306,6 +312,10 @@ instance GeometryExplosive FlatVFloat where
         x' <- unS (unFlat x)
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance GeometryExplosive NoPerspectiveVFloat where
     exploseGeometry x n = do
@@ -313,6 +323,10 @@ instance GeometryExplosive NoPerspectiveVFloat where
         x' <- unS (unNPersp x)
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance GeometryExplosive VInt where
     exploseGeometry x n = do
@@ -320,6 +334,10 @@ instance GeometryExplosive VInt where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance GeometryExplosive VWord where
     exploseGeometry x n = do
@@ -327,6 +345,10 @@ instance GeometryExplosive VWord where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance GeometryExplosive VBool where
     exploseGeometry x n = do
@@ -334,49 +356,74 @@ instance GeometryExplosive VBool where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    enumerateVaryings x = do
+        n <- get
+        put (n + 1)
+        return ["vgf" ++ show n]
 
 instance (GeometryExplosive a) => GeometryExplosive (V0 a) where
     exploseGeometry V0 = return
+    enumerateVaryings V0 = return []
 
 instance (GeometryExplosive a) => GeometryExplosive (V1 a) where
     exploseGeometry (V1 x) n = do
         exploseGeometry x n
+    enumerateVaryings (V1 x) =
+        enumerateVaryings x
 
 instance (GeometryExplosive a) => GeometryExplosive (V2 a) where
     exploseGeometry (V2 x y) n = do
         exploseGeometry x n >>= exploseGeometry y
+    enumerateVaryings (V2 x y) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a) => GeometryExplosive (V3 a) where
     exploseGeometry (V3 x y z) n = do
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
+    enumerateVaryings (V3 x y z) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a) => GeometryExplosive (V4 a) where
-    exploseGeometry (V4 x y z w) n = do
+    exploseGeometry (V4 x y z w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
+    enumerateVaryings (V4 x y z w) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b) => GeometryExplosive (a,b) where
-    exploseGeometry (x, y) n = do
+    exploseGeometry (x, y) n =
         exploseGeometry x n >>= exploseGeometry y
+    enumerateVaryings (x, y) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c) => GeometryExplosive (a,b,c) where
-    exploseGeometry (x, y, z) n = do
+    exploseGeometry (x, y, z) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
+    enumerateVaryings (x, y, z) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d) => GeometryExplosive (a,b,c,d) where
-    exploseGeometry (x, y, z, w) n = do
+    exploseGeometry (x, y, z, w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
+    enumerateVaryings (x, y, z, w) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e) => GeometryExplosive (a,b,c,d,e) where
-    exploseGeometry (x, y, z, w, r) n = do
+    exploseGeometry (x, y, z, w, r) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r
+    enumerateVaryings (x, y, z, w, r) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f) => GeometryExplosive (a,b,c,d,e,f) where
-    exploseGeometry (x, y, z, w, r, s) n = do
+    exploseGeometry (x, y, z, w, r, s) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s
+    enumerateVaryings (x, y, z, w, r, s) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f, GeometryExplosive g) => GeometryExplosive (a,b,c,d,e,f,g) where
-    exploseGeometry (x, y, z, w, r, s, t) n = do
+    exploseGeometry (x, y, z, w, r, s, t) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s >>= exploseGeometry t
+    enumerateVaryings (x, y, z, w, r, s, t) =
+        concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s, enumerateVaryings t]
 
 ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -402,7 +449,7 @@ generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
     where
         ToFragmentFromGeometry (Kleisli m) = toFragmentFromGeometry :: ToFragmentFromGeometry (GGenerativeGeometry p (VPos, a)) (FragmentFormat a)
         f :: Int -> (GGenerativeGeometry p (VPos, a), GeometryStreamData) -> (FragmentFormat a, FragmentStreamData)
-        f n (x, GeometryStreamData a b) = (evalState (m x) 0, FragmentStreamData n (Just (return ())) (makePrims a x) b true)
+        f n (x, GeometryStreamData name layout psd) = (evalState (m x) 0, FragmentStreamData n True (makePrims layout x) psd true)
 
         makePrims a x = do
             declareGeometryLayout a (toLayoutOut (undefined :: p)) maxVertices
