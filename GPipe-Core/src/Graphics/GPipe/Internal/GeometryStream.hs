@@ -283,6 +283,12 @@ emitVertex (V4 x y z w, a) g = S $ do
     T.lift $ T.lift $ tell "EmitVertex();\n"
     return notMeantToBeRead
 
+emitVertex' :: GeometryExplosive a => a -> GGenerativeGeometry p a -> GGenerativeGeometry p a
+emitVertex' a g = S $ do
+    exploseGeometry a 0
+    T.lift $ T.lift $ tell "EmitVertex();\n"
+    return notMeantToBeRead
+
 endPrimitive :: GGenerativeGeometry p a -> GGenerativeGeometry p a
 endPrimitive g = S $ do
     g' <- unS g
@@ -368,61 +374,61 @@ instance (GeometryExplosive a) => GeometryExplosive (V0 a) where
 instance (GeometryExplosive a) => GeometryExplosive (V1 a) where
     exploseGeometry (V1 x) n = do
         exploseGeometry x n
-    enumerateVaryings (V1 x) =
+    enumerateVaryings ~(V1 x) =
         enumerateVaryings x
 
 instance (GeometryExplosive a) => GeometryExplosive (V2 a) where
     exploseGeometry (V2 x y) n = do
         exploseGeometry x n >>= exploseGeometry y
-    enumerateVaryings (V2 x y) =
+    enumerateVaryings ~(V2 x y) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a) => GeometryExplosive (V3 a) where
     exploseGeometry (V3 x y z) n = do
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
-    enumerateVaryings (V3 x y z) =
+    enumerateVaryings ~(V3 x y z) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a) => GeometryExplosive (V4 a) where
     exploseGeometry (V4 x y z w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
-    enumerateVaryings (V4 x y z w) =
+    enumerateVaryings ~(V4 x y z w) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b) => GeometryExplosive (a,b) where
     exploseGeometry (x, y) n =
         exploseGeometry x n >>= exploseGeometry y
-    enumerateVaryings (x, y) =
+    enumerateVaryings ~(x, y) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c) => GeometryExplosive (a,b,c) where
     exploseGeometry (x, y, z) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
-    enumerateVaryings (x, y, z) =
+    enumerateVaryings ~(x, y, z) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d) => GeometryExplosive (a,b,c,d) where
     exploseGeometry (x, y, z, w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
-    enumerateVaryings (x, y, z, w) =
+    enumerateVaryings ~(x, y, z, w) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e) => GeometryExplosive (a,b,c,d,e) where
     exploseGeometry (x, y, z, w, r) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r
-    enumerateVaryings (x, y, z, w, r) =
+    enumerateVaryings ~(x, y, z, w, r) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f) => GeometryExplosive (a,b,c,d,e,f) where
     exploseGeometry (x, y, z, w, r, s) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s
-    enumerateVaryings (x, y, z, w, r, s) =
+    enumerateVaryings ~(x, y, z, w, r, s) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f, GeometryExplosive g) => GeometryExplosive (a,b,c,d,e,f,g) where
     exploseGeometry (x, y, z, w, r, s, t) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s >>= exploseGeometry t
-    enumerateVaryings (x, y, z, w, r, s, t) =
+    enumerateVaryings ~(x, y, z, w, r, s, t) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s, enumerateVaryings t]
 
 ------------------------------------------------------------------------------------------------------------------------------------

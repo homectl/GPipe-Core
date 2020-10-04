@@ -1,15 +1,11 @@
-module Main
-    ( main
-    ) where
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 
-import Graphics.GPipe.Internal.TestCompiler
+module Main where
 
-import Test.HUnit hiding (Test)
 import Test.Framework
-import Test.Framework.Providers.HUnit
 
-main = defaultMain
-    [ testGroup "GPipe"
-        [   compilerTestGroup
-        ]
-    ]
+import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestCompiler
+import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestPrimitiveStream
+import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestUniform
+
+main = htfMain htf_importedTests

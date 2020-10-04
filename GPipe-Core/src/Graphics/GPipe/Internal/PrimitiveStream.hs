@@ -42,15 +42,6 @@ import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 import Data.Maybe (fromMaybe)
 
-import qualified Debug.Trace as Trace
-import Data.List (intercalate)
-
-trace :: Show a => String -> a -> a
-trace t a = Trace.trace (t ++ " = " ++ show a) a
-
-traceList :: Show a => String -> [a] -> [a]
-traceList t as = Trace.trace (t ++ " = [\n\t" ++ intercalate "\n\t" (map show as) ++ "\n]") as
-
 -- Originally named DrawCallName and later in the code as PrimN. I've sticked
 -- with the latter, because it's more logical.
 type PrimitiveName = Int
@@ -64,9 +55,11 @@ type USize = Int
 data PrimitiveStreamData = PrimitiveStreamData PrimitiveName USize
 
 -- Should be renamed as VertexStream. There a reason why the underlying VAO
--- behind. Beside, it forces me to name GeometryStream the real PrimitiveStream.
--- I don’t need why 't' was carried alongside but it is now required for adding
--- Geometry shaders. | A @'PrimitiveStream' t a @ is a stream of primitives of
+-- behind is called a VAO. Beside, it forces me to name GeometryStream the real
+-- PrimitiveStream. I don’t need why 't' was carried alongside but it is now
+-- required for adding Geometry shaders.
+--
+-- | A @'PrimitiveStream' t a @ is a stream of primitives of
 -- type @t@ where the vertices are values of type @a@. You
 --   can operate a stream's vertex values using the 'Functor' instance (this will result in a shader running on the GPU).
 --   You may also append 'PrimitiveStream's using the 'Monoid' instance, but if possible append the origin 'PrimitiveArray's instead, as this will create more optimized
@@ -91,13 +84,31 @@ type UniOffset = Int
 
 -- | The arrow type for 'toVertex'.
 data ToVertex a b = ToVertex
+
     -- To set the uniform buffer content (for the literal values, not the one buffered).
-    !(Kleisli (StateT (Ptr ()) IO) a b)
-    -- To create (and declare) the input variable in the shader.
-    -- (Int -> ExprM String) could be rewritten as (UniOffset -> ExprM String).
-    !(Kleisli (StateT (Int, UniOffset, OffsetToSType) (Reader (Int -> ExprM String))) a b)
+    !(  Kleisli
+        (   StateT (Ptr ()) IO
+        ) a b)
+
+    -- To declare the input variable in the shader.
+    !(  Kleisli
+        (   StateT
+            (   Int -- The number of components in the stored type (eg. would 2 for a B2/V2).
+            ,   UniOffset -- Offset to the uniform?
+            ,   OffsetToSType -- Offset -> SType?
+            )
+            (   Reader
+                (   Int {- offset -} -> ExprM String -- Ends up calling useVInput and returning the input variable name (eg. 'in123').
+                )
+            )
+        ) a b)
+
     -- To construct the VAO for the vertex buffer.
-    !(Kleisli (State [Binding -> (IO VAOKey, IO ())]) a b)
+    !(  Kleisli
+        (   State
+            [   Binding -> (IO VAOKey, IO ())
+            ]
+        ) a b)
 
 instance Category ToVertex where
     {-# INLINE id #-}
@@ -122,8 +133,10 @@ toPrimitiveStream sf = Shader $ do
     -- Get the RO uniform alignment from the ReaderT
     uniAl <- askUniformAlignment -- uniAl is not used around…
 
-    -- The explosive input value is only here to ensure that the mf arrow is lazy.
-    let err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
+    let
+        -- The explosive input value is only here to ensure that the mf arrow is lazy.
+        err = error "toPrimitiveStream is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders"
+        -- Is 'offToStype' really built this way or it is not used at all?
         (x, (_, uSize, offToStype)) = runReader
             (runStateT (makeV err) (0, 0, mempty))
             (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
@@ -208,12 +221,13 @@ type PointSize = VFloat
 withPointSize :: (a -> PointSize -> (b, PointSize)) -> PrimitiveStream Points a -> PrimitiveStream Points b
 withPointSize f (PrimitiveStream xs) = PrimitiveStream $ map (\(a, (ps, d)) -> let (b, ps') = f a (fromMaybe (scalarS' "1") ps) in (b, (Just ps', d))) xs
 
--- Why x which is not needed?
+-- Why x which is not needed? Is n < x true?
 makeVertexF x f styp _ = do
     (n, uoffset, m) <- get
     put (n + 1, uoffset, m)
     return (f styp $ useVInput styp n)
 
+append :: Monad m => a -> StateT [a] m ()
 append x = modify (x:)
 
 makeBindVertexFx norm x typ b = do

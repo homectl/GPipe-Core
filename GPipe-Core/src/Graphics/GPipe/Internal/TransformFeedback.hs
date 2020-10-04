@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, Arrows, GeneralizedNewtypeDeriving, GADTs, MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, Arrows, GeneralizedNewtypeDeriving, GADTs, MultiParamTypeClasses, FlexibleContexts #-}
 
 module Graphics.GPipe.Internal.TransformFeedback where
 
@@ -23,56 +23,60 @@ import Foreign ({-Ptr, plusPtr, castPtr,-} nullPtr {-, sizeOf, with-})
 import Foreign.C.String
 import Foreign.Marshal
 import Control.Monad.Trans.State
+import Graphics.GPipe.Internal.Debug
 
-drawNothing :: forall p a s os f. (FragmentInputFromGeometry p a, PrimitiveTopology p, GeometryExplosive a)
+drawNothing :: forall p a s c ds os f. (PrimitiveTopology p, VertexInput a, FragmentInputFromGeometry p (VertexFormat a), GeometryExplosive (VertexFormat a))
+    => Window os c ds
     -- Output feedback buffers should remain black boxes until synchronized
     -- which won't be necessary when using glDrawTransformFeedback (add a flag
     -- for it?).
-    => Buffer os a
+    -> Buffer os a
     -- maxVertices
     -> Int
     -- We should use a primitive (vertex) stream too, but the way we deal
     -- currently with modular stages is not flexible enough and we stick with
     -- geometry stream.
-    -> GeometryStream (GGenerativeGeometry p a)
+    -> GeometryStream (GGenerativeGeometry p (VertexFormat a))
     -> Shader os s ()
-drawNothing buffer maxVertices gs = Shader $ tellDrawcalls gs buffer maxVertices
+drawNothing w buffer maxVertices gs = Shader $ tellDrawcalls w gs buffer maxVertices
 
-tellDrawcalls :: forall p a s os f. (FragmentInputFromGeometry p a, PrimitiveTopology p, GeometryExplosive a)
-    => GeometryStream (GGenerativeGeometry p a)
+tellDrawcalls :: forall p a s c ds os. (PrimitiveTopology p, VertexInput a, FragmentInputFromGeometry p (VertexFormat a), GeometryExplosive (VertexFormat a))
+    => Window os c ds
+    -> GeometryStream (GGenerativeGeometry p (VertexFormat a))
     -> Buffer os a
     -> Int
     -> ShaderM s ()
-tellDrawcalls (GeometryStream xs) buffer maxVertices =  mapM_ f xs where
+tellDrawcalls w (GeometryStream xs) buffer maxVertices =  mapM_ f xs where
     f (x, gsd@(GeometryStreamData n layoutName _)) = do
-        tellDrawcall $ makeDrawcall buffer gsd $ do
+        tellDrawcall $ makeDrawcall w buffer gsd $ do
             declareGeometryLayout layoutName (toLayoutOut (undefined :: p)) maxVertices
             x' <- unS x
             return ()
 
-        let varyings = evalState (enumerateVaryings (undefined :: a)) 0
+        let varyings = evalState (enumerateVaryings (undefined :: VertexFormat a)) 0
             varyingCount = length varyings
             bufferMode = GL_INTERLEAVED_ATTRIBS
             io s pName = do
-                names <- mapM newCString varyings
+                names <- mapM newCString (traceList "varyings" varyings)
                 withArray names $ \a -> do
                     glTransformFeedbackVaryings pName (fromIntegral varyingCount) a bufferMode
                 mapM_ free names
 
         modifyRenderIO (\s -> s { transformFeedbackToRenderIO = insert n io (transformFeedbackToRenderIO s) } )
 
-makeDrawcall :: forall a s os. GeometryExplosive a
-    => Buffer os a
+makeDrawcall :: forall a s c ds os. (VertexInput a) -- , GeometryExplosive a
+    => Window os c ds
+    -> Buffer os a
     -> GeometryStreamData
     -> ExprM ()
     -> IO (Drawcall s)
-makeDrawcall buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shader = do
+makeDrawcall w buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shader = do
     let shaderDeclarations = tellGlobalLn "// Meow!"
     (gsource, gunis, gsamps, _, prevShaderDeclarations, prevShader) <- runExprM shaderDeclarations shader
     (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevShaderDeclarations prevShader
     bufferName <- readIORef (bufName buffer)
     return $ Drawcall
-        undefined
+        (const (Left (getWinName w), return ()))
         (Just bufferName)
         primN
         (Just geoN)

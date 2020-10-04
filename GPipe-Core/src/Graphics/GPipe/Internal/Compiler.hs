@@ -28,6 +28,7 @@ import Data.IORef
 import Data.List (zip5)
 import Data.Word
 import Data.Monoid ((<>))
+import Graphics.GPipe.Internal.Debug
 
 -- public
 type WinId = Int
@@ -264,9 +265,9 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
             Just fsource -> do
                 fShader <- glCreateShader GL_FRAGMENT_SHADER
                 mErrF <- compileOpenGlShader fShader fsource
-                return (Just fShader, mErrG)
+                return (Just fShader, mErrF)
 
-        if all isNothing [mErrG, mErrV, mErrF]
+        if all isNothing [mErrV, mErrG, mErrF]
             then do
                 pName <- glCreateProgram
                 glAttachShader pName vShader
@@ -352,6 +353,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
+            liftIO $ putStrLn " ---- creating renderer ----"
             rs <- lift $ lift get
             renv <- lift ask
             let (mFboKeyIO, blendIO) = fboSetup x
@@ -382,6 +384,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
             windowId <- case mFboKeyIO of
                 Left wid -> do -- Bind correct context
                     inwin wid $ do
+                        putStrLn " ---- binding (a) ----"
                         glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                         return Nothing
                     return wid
@@ -390,6 +393,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     -- (something wrong here?)
                     (cwid, cd, doAsync) <- unRender getLastRenderWin
                     inwin cwid $ do
+                        putStrLn " ---- binding (b) ----"
                         fbokey <- fboKeyIO
                         mfbo <- getFBO cd fbokey
                         case mfbo of
@@ -417,6 +421,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     Nothing -> return () -- Window deleted
                     Just (ws, doAsync) ->
                         liftIO $ do
+                            putStrLn " ---- drawing ----"
                             let cd = windowContextData ws
                             key <- keyIO
                             mvao <- getVAO cd key
@@ -434,6 +439,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                             drawIO
 
     let deleter = do
+            putStrLn " ---- deleting ----"
             glDeleteProgram pName
             when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
 
@@ -523,6 +529,7 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
 -- private
 compileOpenGlShader :: GLuint -> String -> IO (Maybe String)
 compileOpenGlShader name source = do
+    writeFile ("shaders/" ++ show name ++ ".glsl") source -- For debug purposes only.
     withCStringLen source $ \ (ptr, len) ->
                                 with ptr $ \ pptr ->
                                     with (fromIntegral len) $ \ plen ->

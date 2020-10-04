@@ -57,15 +57,17 @@ stypeSize _ = 4
 type ExprM = SNMapReaderT
     [String] -- Cached GLSL source code.
     (StateT
-        ExprState -- Shader inputs and outputs.
+        ExprState -- Shader inputs.
         (WriterT
             String -- Generated GLSL source code.
             (StateT
-                NextTempVar
-                IO -- IO for stable names.
+                NextTempVar -- Next unique variable name.
+                IO -- IO to create stable names.
             )
         )
     )
+
+type GlobDeclM = Writer String
 
 data ExprState = ExprState
     {   shaderUsedUniformBlocks :: Map.IntMap (GlobDeclM ())
@@ -75,7 +77,7 @@ data ExprState = ExprState
         ,   (   ExprM () -- Output assignement required in the previous shader (obviously undefined for the first shader - see comment below.)
             ,   GlobDeclM () -- Output declaration required in the previous shader.
             ) -- Requirements for the previous shader.
-    )
+        )
     ,   shaderGeometry :: Maybe (GlobDeclM ()) -- Input/ouput layout declarations for current shader (if it is a geometry shader).
     }
 
@@ -128,8 +130,6 @@ runExprM d m = do
             , "}\n"
             ]
     return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
-
-type GlobDeclM = Writer String
 
 newtype S x a = S { unS :: ExprM String }
 
