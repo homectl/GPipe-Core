@@ -33,19 +33,23 @@ test_toVertex = do
             "Creating values that are dependant on the actual HostFormat values," ++
             " this is not allowed since it doesn't allow static creation of shaders"
 
-        numberOfComponentsInStoredType = 22
+        nextIndex = 22
         uniOffset = undefined
         offToStype0 = mempty
 
         (x, (_, uSize, offToStype)) = runReader
-            (runStateT (makeV err) (numberOfComponentsInStoredType, uniOffset, offToStype0))
+            (runStateT (makeV err) (nextIndex, uniOffset, offToStype0))
             (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
 
-        d = tellGlobalLn "// hello"
+        decls = tellGlobalLn "// hello"
 
-        e = mapM unS x >>= \(V2 s1 s2) -> tellAssignment' "out_name" (concat ["(", s1, ",", s2, ")"])
+        shaderExpr = mapM unS x >>= \(V2 s1 s2) -> tellAssignment' "out_name" (concat ["(", s1, ",", s2, ")"])
 
-    (source, unis, samps, inps, prevDecls, prevSs) <- runExprM d e
+    -- The last two values aren’t meant to be evaluated (will trip over an
+    -- undefined value otherwise) since there is no previous stage here.
+    (source, unis, samps, inps, _, _) <- runExprM decls shaderExpr
+
+    assertEqual "" (snd . runWriter . buildUDecl $ offToStype)
 
     assertEqual
         (concatMap withNewline
@@ -58,3 +62,9 @@ test_toVertex = do
             , "}"
             ])
         source
+
+    assertEqual ([] :: [Int]) unis
+    assertEqual ([] :: [Int]) samps
+    assertEqual [nextIndex] inps
+
+    return ()
