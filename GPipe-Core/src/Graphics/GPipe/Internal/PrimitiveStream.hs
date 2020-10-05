@@ -85,7 +85,7 @@ type UniOffset = Int
 -- | The arrow type for 'toVertex'.
 data ToVertex a b = ToVertex
 
-    -- To set the uniform buffer content (for the literal values, not the one buffered).
+    -- To set the uniform buffer content (for the uniform vertex values only).
     !(  Kleisli
         (   StateT (Ptr ()) IO
         ) a b)
@@ -103,7 +103,7 @@ data ToVertex a b = ToVertex
             )
         ) a b)
 
-    -- To construct the VAO for the vertex buffer.
+    -- To bind the underlying VAO for the vertex buffer (see PrimitiveArray).
     !(  Kleisli
         (   State
             [   Binding -> (IO VAOKey, IO ())
@@ -264,10 +264,9 @@ makeBindVertexI x typ b = do
                      return undefined
 noWriter = Kleisli (const $ return undefined)
 
--- Uniform values
--- Literal values seems to be allowed in a primitive stream, but will be
--- provided using a dedicated uniform buffer object.
-
+-- Uniform vertex values?
+-- What’s the difference with regular uniform values?
+-- Why using a dedicated uniform buffer object?
 toUniformVertex :: forall a b. Storable a => SType -> ToVertex a (S V b)
 toUniformVertex styp = ToVertex (Kleisli uWriter) (Kleisli makeV) (Kleisli makeBind)
     where
