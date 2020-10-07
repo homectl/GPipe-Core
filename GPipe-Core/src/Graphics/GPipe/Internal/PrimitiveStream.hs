@@ -86,6 +86,7 @@ type UniOffset = Int
 data ToVertex a b = ToVertex
 
     -- To set the uniform buffer content (for the uniform vertex values only).
+    -- TODO Probably useless now.
     !(  Kleisli
         (   StateT (Ptr ()) IO
         ) a b)
@@ -266,7 +267,6 @@ noWriter = Kleisli (const $ return undefined)
 
 -- Uniform vertex values?
 -- What’s the difference with regular uniform values?
--- Why using a dedicated uniform buffer object?
 toUniformVertex :: forall a b. Storable a => SType -> ToVertex a (S V b)
 toUniformVertex styp = ToVertex (Kleisli uWriter) (Kleisli makeV) (Kleisli makeBind)
     where

@@ -24,7 +24,7 @@ test_toVertex = do
     let
         -- VertexFormat (B2 Float) = V2 VFloat
         ToVertex
-            (Kleisli uWriter) -- To set the uniform vertex content, undefined for "regular" a vertex value.
+            (Kleisli uWriter) -- To set the uniform vertex content, do nothing for "regular" vertex values.
             (Kleisli makeV) -- To declare the input variable in the shader.
             (Kleisli makeBind) -- To bind the underlying VAO.
             = toVertex :: ToVertex (B2 Float) (VertexFormat (B2 Float)) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
@@ -77,7 +77,7 @@ test_toUniformVertex = do
         ToVertex
             (Kleisli uWriter) -- To inject the value in the special uniform buffer.
             (Kleisli makeV) -- To declare the input variable in the shader.
-            (Kleisli makeBind) -- Undefined for a uniform vertex value.
+            (Kleisli makeBind) -- Do nothing for a uniform vertex value (no VAO involved).
             = toVertex :: ToVertex Float (VertexFormat Float)
 
         notToBeEvaluated = error "Forbidden"

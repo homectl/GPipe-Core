@@ -38,7 +38,7 @@ class BufferFormat a => UniformInput a where
     toUniform :: ToUniform x a (UniformFormat a x)
 
 -- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment.
-getUniform :: forall os f s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os s (UniformFormat b x)
+getUniform :: forall os s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os s (UniformFormat b x)
 getUniform sf = Shader $ do
     uniAl <- askUniformAlignment
     blockId <- getNewName
