@@ -71,41 +71,41 @@ test_buildUDecl = do
             ])
 
 test_toUniform = do
-    let ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform V (B2 Float) (UniformFormat (B2 Float) V)
+    let ToUniform (Kleisli shaderGenF) = toUniform :: ToUniform V (B Float) (UniformFormat (B Float) V)
 
-        uniAl = 9 :: UniformAlignment
-        blockId = 3 :: Int
-        sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform (B2 Float))
+        uniAl = 9 :: UniformAlignment -- Like uniOffset, but ignored here?
+        blockId = 33
+        sampleBuffer = makeBuffer undefined undefined uniAl :: Buffer os (Uniform (B Float))
 
         fromBUnifom (Uniform b) = b
 
-        shaderGen :: (Int -> ExprM String) -> (UniformFormat (B2 Float) V, OffsetToSType) -- Int is name of uniform block
+        shaderGen :: (Int {- name of uniform block -} -> ExprM String) -> (UniformFormat (B Float) V, OffsetToSType)
         shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
 
         (u, offToStype) = shaderGen (useUniform (buildUDecl offToStype) blockId)
 
         decls = tellGlobalLn "// hello"
 
-        shaderExpr = mapM unS u >>= \(V2 s1 s2) -> return ()
+        shaderExpr = unS u >>= \s -> return ()
 
     (source, unis, samps, inps, _, _) <- runExprM decls shaderExpr
 
     let uDecl = snd . runWriter . buildUDecl $ offToStype
-    assertEqual "vec2 u0;\n" uDecl
+    assertEqual "float u0;\n" uDecl
 
     assertEqual
         (concatMap withNewline
             [ "#version 450"
             , "// hello;"
-            , "layout(std140) uniform uBlock3 {"
-            , "vec2 u0;"
-            , "} u3;"
+            , "layout(std140) uniform uBlock33 {"
+            , "float u0;"
+            , "} u33;"
             , "void main() {"
             , "}"
             ])
         source
 
-    assertEqual ([3] :: [Int]) unis
+    assertEqual ([blockId] :: [Int]) unis
     assertEqual ([] :: [Int]) samps
     assertEqual [] inps
 

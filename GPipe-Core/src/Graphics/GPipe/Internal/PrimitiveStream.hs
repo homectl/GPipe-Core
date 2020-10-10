@@ -13,6 +13,7 @@ import Graphics.GPipe.Internal.Shader
 import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.PrimitiveArray
 import Graphics.GPipe.Internal.Context
+-- This import is only needed for the unused uniform alternate implementation.
 import Graphics.GPipe.Internal.Uniform
 import Control.Category
 import Control.Arrow
@@ -85,8 +86,10 @@ type UniOffset = Int
 -- | The arrow type for 'toVertex'.
 data ToVertex a b = ToVertex
 
-    -- To set the uniform buffer content (for the uniform vertex values only).
-    -- TODO Probably useless now.
+    -- To set the uniform buffer content.
+    -- It is only used by the "uniform vertex" which is deprecated/experimental (see toUniformVertex).
+    -- As it, it is not currently in use.
+    -- Note: output value 'b' is not relevant.
     !(  Kleisli
         (   StateT (Ptr ()) IO
         ) a b)
@@ -105,6 +108,7 @@ data ToVertex a b = ToVertex
         ) a b)
 
     -- To bind the underlying VAO for the vertex buffer (see PrimitiveArray).
+    -- Note: output value 'b' is not relevant.
     !(  Kleisli
         (   State
             [   Binding -> (IO VAOKey, IO ())
@@ -191,16 +195,17 @@ toPrimitiveStream sf = Shader $ do
         assignIxs _ _ _ _ = error "Too few attributes generated in toPrimitiveStream"
 
         attribs a (binds, uBname, uSize) = let
-                              (_,bindsAssoc) = runState (makeBind a) []
+                              bindsAssoc = execState (makeBind a) [] -- (_,bindsAssoc) = runState (makeBind a) []
                               (ioVaokeys, ios) = unzip $ assignIxs 0 0 binds $ reverse bindsAssoc
                           in (writeUBuffer uBname uSize a >> sequence ioVaokeys, sequence_ ios)
 
-        -- Modify the (OpenGL) shader state which is the set of OpenGL commands to run to draw this this shader.
+        -- Modify the (OpenGL) shader state which is the set of OpenGL commands to run to draw this shader.
         doForInputArray :: Int -> (s -> [([Binding], GLuint, Int) -> ((IO [VAOKey], IO ()), IO ())]) -> ShaderM s ()
         doForInputArray n io = modifyRenderIO (\s -> s { inputArrayToRenderIO = insert n io (inputArrayToRenderIO s) } ) -- modifyRenderIO changes the ShaderState
 
         writeUBuffer _ 0 _ = return () -- If the uniform buffer is size 0 there is no buffer
         writeUBuffer bname size a = do
+            error "Cannot happen!"
             glBindBuffer GL_COPY_WRITE_BUFFER bname
             ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER 0 (fromIntegral size) (GL_MAP_WRITE_BIT + GL_MAP_INVALIDATE_BUFFER_BIT)
             void $ runStateT (uWriter a) ptr
@@ -222,14 +227,14 @@ type PointSize = VFloat
 withPointSize :: (a -> PointSize -> (b, PointSize)) -> PrimitiveStream Points a -> PrimitiveStream Points b
 withPointSize f (PrimitiveStream xs) = PrimitiveStream $ map (\(a, (ps, d)) -> let (b, ps') = f a (fromMaybe (scalarS' "1") ps) in (b, (Just ps', d))) xs
 
+append :: Monad m => a -> StateT [a] m ()
+append x = modify (x:)
+
 -- Why x which is not needed? Is n < x true?
 makeVertexF x f styp _ = do
     (n, uoffset, m) <- get
     put (n + 1, uoffset, m)
     return (f styp $ useVInput styp n)
-
-append :: Monad m => a -> StateT [a] m ()
-append x = modify (x:)
 
 makeBindVertexFx norm x typ b = do
     let combOffset = bStride b * bSkipElems b + bOffset b
@@ -249,24 +254,33 @@ makeBindVertexFnorm = makeBindVertexFx True
 makeBindVertexF = makeBindVertexFx False
 
 makeVertexI x f styp _ = do
-                     (n, uoffset,m) <- get
-                     put (n + 1, uoffset,m)
-                     return (f styp $ useVInput styp n)
+    (n, uoffset,m) <- get
+    put (n + 1, uoffset,m)
+    return (f styp $ useVInput styp n)
+
 makeBindVertexI x typ b = do
-                     let combOffset = bStride b * bSkipElems b + bOffset b
-                     append (\ix -> ( do bn <- readIORef $ bName b
-                                         return $ VAOKey bn combOffset x False (bInstanceDiv b)
-                                  , do bn <- readIORef $ bName b
-                                       let ix' = fromIntegral ix
-                                       glEnableVertexAttribArray ix'
-                                       glBindBuffer GL_ARRAY_BUFFER bn
-                                       glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
-                                       glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset)))
-                     return undefined
+    let combOffset = bStride b * bSkipElems b + bOffset b
+    append (\ix ->
+        (   do  bn <- readIORef $ bName b
+                return $ VAOKey bn combOffset x False (bInstanceDiv b)
+        ,   do  bn <- readIORef $ bName b
+                let ix' = fromIntegral ix
+                glEnableVertexAttribArray ix'
+                glBindBuffer GL_ARRAY_BUFFER bn
+                glVertexAttribDivisor ix' (fromIntegral $ bInstanceDiv b)
+                glVertexAttribIPointer ix' x typ (fromIntegral $ bStride b) (intPtrToPtr $ fromIntegral combOffset))
+        )
+    return undefined
+
 noWriter = Kleisli (const $ return undefined)
 
--- Uniform vertex values?
--- What’s the difference with regular uniform values?
+-- Uniform vertex values? Some kind of alternate implementation for uniforms not
+-- currently used (the regular uniforms are handled in the Uniform module). It
+-- don’t know if it is something deprecated or experimental. I don’t even know
+-- how it could be used. Obviously, a buffer cannot contains both varying and
+-- uniform data…
+--
+-- [begin]
 toUniformVertex :: forall a b. Storable a => SType -> ToVertex a (S V b)
 toUniformVertex styp = ToVertex (Kleisli uWriter) (Kleisli makeV) (Kleisli makeBind)
     where
@@ -295,6 +309,7 @@ instance VertexInput Int32 where
 instance VertexInput Word32 where
     type VertexFormat Word32 = VWord
     toVertex = toUniformVertex STypeUInt
+-- [end]
 
 -- scalars
 

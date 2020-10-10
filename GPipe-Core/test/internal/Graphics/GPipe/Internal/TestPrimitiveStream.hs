@@ -11,6 +11,8 @@ import qualified Data.IntMap as Map
 import Prelude hiding (length, id, (.))
 import Linear.V2
 
+import Graphics.GPipe.Internal.Compiler
+import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Expr
 import Graphics.GPipe.Internal.Buffer
 import Graphics.GPipe.Internal.Uniform
@@ -29,6 +31,7 @@ test_toVertex = do
             (Kleisli makeBind) -- To bind the underlying VAO.
             = toVertex :: ToVertex (B2 Float) (VertexFormat (B2 Float)) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
+    let
         -- Stream, varying, the shader could only depend on the streamed type, not any particular value.
         -- In other words: makeV :: type_structure_only_not_its_value(B2 Float) -> V2 VFloat
         notToBeEvaluated = error $
@@ -39,6 +42,7 @@ test_toVertex = do
         uniOffset = undefined
         offToStype0 = mempty
 
+        -- makePrimitive do the same (among other things)
         (x, (_, uSize, offToStype)) = runReader
             (runStateT (makeV notToBeEvaluated) (nextIndex, uniOffset, offToStype0))
             (useUniform (buildUDecl offToStype) undefined)
@@ -60,7 +64,7 @@ test_toVertex = do
             , "// hello;"
             , "in vec2 in22;"
             , "void main() {"
-            , "vec2 t0 = in22;" -- Simply to create alias with a t(emporary) value name?
+            , "vec2 t0 = in22;" -- Simply to create alias with a t(emporary) value name? And why not the same for uniform?
             , "}"
             ])
         source
@@ -69,9 +73,13 @@ test_toVertex = do
     assertEqual ([] :: [Int]) samps
     assertEqual [nextIndex] inps
 
+    let
+        bindsAssoc = execState (makeBind notToBeEvaluated) [] :: [Binding -> (IO VAOKey, IO ())]
+
     return ()
 
--- TODO Compare with regular Uniform to understand what it is.
+-- Regular uniforms work produce mostly the same result but differently (see the
+-- TestUniform modure).
 test_toUniformVertex = do
     let
         ToVertex
@@ -85,10 +93,11 @@ test_toUniformVertex = do
         nextIndex = undefined
         uniOffset = 8 -- multiple of 4
         offToStype0 = mempty
+        blockId = 33 -- (0 in principle) is special blockname for the one used by primitive stream
 
         (x, (_, uSize, offToStype)) = runReader
             (runStateT (makeV notToBeEvaluated) (nextIndex, uniOffset, offToStype0))
-            (useUniform (buildUDecl offToStype) 33) -- 33 (0 in principle) is special blockname for the one used by primitive stream
+            (useUniform (buildUDecl offToStype) blockId)
 
         decls = tellGlobalLn "// hello"
 
@@ -117,7 +126,7 @@ test_toUniformVertex = do
             ])
         source
 
-    assertEqual ([33] :: [Int]) unis
+    assertEqual ([blockId] :: [Int]) unis
     assertEqual ([] :: [Int]) samps
     assertEqual [] inps
 

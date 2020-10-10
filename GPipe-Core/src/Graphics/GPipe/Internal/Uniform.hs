@@ -37,7 +37,10 @@ class BufferFormat a => UniformInput a where
     --  @proc ~pattern -> do ...@.
     toUniform :: ToUniform x a (UniformFormat a x)
 
--- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function is used to retrieve the buffer and the index into this buffer from the shader environment.
+-- | Load a uniform value from a 'Buffer' into a 'Shader'. The argument function
+-- is used to retrieve the buffer and the index into this buffer from the shader
+-- environment. UBO are obviously used here and there is no way to use "classic"
+-- uniform.
 getUniform :: forall os s b x. (UniformInput b) => (s -> (Buffer os (Uniform b), Int)) -> Shader os s (UniformFormat b x)
 getUniform sf = Shader $ do
     uniAl <- askUniformAlignment
