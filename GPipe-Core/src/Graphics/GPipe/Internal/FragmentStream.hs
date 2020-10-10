@@ -83,6 +83,7 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
             in  if w < 0 || h < 0
                     then error "ViewPort, negative size"
                     else do setGlCullFace side
+                            putStrLn " ---- rasterize ----"
                             glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glDepthRange (realToFrac dmin) (realToFrac dmax)

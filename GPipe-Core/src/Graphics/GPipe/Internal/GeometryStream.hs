@@ -285,6 +285,7 @@ emitVertex (V4 x y z w, a) g = S $ do
 
 emitVertex' :: GeometryExplosive a => a -> GGenerativeGeometry p a -> GGenerativeGeometry p a
 emitVertex' a g = S $ do
+    g' <- unS g
     exploseGeometry a 0
     T.lift $ T.lift $ tell "EmitVertex();\n"
     return notMeantToBeRead
@@ -466,7 +467,8 @@ generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
             let (side, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s
             in  if w < 0 || h < 0
                     then error "ViewPort, negative size"
-                    else do setGlCullFace side
+                    else do putStrLn " ---- generate and rasterize ----"
+                            setGlCullFace side
                             glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glDepthRange (realToFrac dmin) (realToFrac dmax)

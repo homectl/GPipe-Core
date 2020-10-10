@@ -86,7 +86,10 @@ tests:
 
 executables:
     playground:
-        main: MainTest.hs
+        main: MainTest2.hs
         source-dirs:
         - src
         - playground
+        dependencies:
+        - linear
+        - JuicyPixels

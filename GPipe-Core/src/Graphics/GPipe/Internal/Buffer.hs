@@ -349,6 +349,7 @@ newBuffer' elementCount
     | maybe False (< 0) elementCount = error "newBuffer, length negative"
     | otherwise = do
     (buffer, nameRef, name) <- liftNonWinContextIO $ do
+        putStrLn " ---- newBuffer ----"
         name <- alloca $ \ptr -> do
             (if isJust elementCount then glGenBuffers else glGenTransformFeedbacks) 1 ptr
             peek ptr
@@ -379,12 +380,19 @@ writeBuffer buffer offset elems
             off = fromIntegral $ offset * elemSize
 
         in liftNonWinContextAsyncIO $ do
+            putStrLn " ---- writeBuffer ----"
             bname <- readIORef $ bufName buffer
             glBindBuffer GL_COPY_WRITE_BUFFER bname
             ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $maxElems * elemSize) (GL_MAP_WRITE_BIT + GL_MAP_FLUSH_EXPLICIT_BIT)
+            putStrLn " #1"
+            {-
             end <- bufferWriteInternal buffer ptr (take maxElems elems)
+            putStrLn " #2"
             glFlushMappedBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr)
+            putStrLn " #3"
             void $ glUnmapBuffer GL_COPY_WRITE_BUFFER
+            -}
+            putStrLn " #4"
 
 -- | Copies values from one buffer to another (of the same type).
 --
@@ -397,6 +405,7 @@ copyBuffer bFrom from bTo to len
     | len + from > bufferLength' bFrom = error "writeBuffer, source buffer too small"
     | len + to > bufferLength' bTo = error "writeBuffer, destination buffer too small"
     | otherwise = liftNonWinContextAsyncIO $ do
+        putStrLn " ---- copyBuffer' ----"
         bnamef <- readIORef $ bufName bFrom
         bnamet <- readIORef $ bufName bTo
         glBindBuffer GL_COPY_READ_BUFFER bnamef

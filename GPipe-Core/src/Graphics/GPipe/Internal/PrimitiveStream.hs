@@ -242,6 +242,7 @@ makeBindVertexFx norm x typ b = do
         (   do  bn <- readIORef $ bName b
                 return $ VAOKey bn combOffset x norm (bInstanceDiv b)
         ,   do  bn <- readIORef $ bName b
+                putStrLn " ---- bind vertex Fx ----"
                 let ix' = fromIntegral ix
                 glEnableVertexAttribArray ix'
                 glBindBuffer GL_ARRAY_BUFFER bn

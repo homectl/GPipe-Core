@@ -36,12 +36,13 @@ module Graphics.GPipe (
     module Graphics.GPipe.FragmentStream,
     module Graphics.GPipe.FrameBuffer,
     module Graphics.GPipe.GeometryStream,
+    module Graphics.GPipe.TransformFeedback,
     module Graphics.GPipe.Shader,
     module Graphics.GPipe.Expr,
     module Graphics.GPipe.Uniform,
     module Graphics.GPipe.Texture,
     module Graphics.GPipe.Sampler,
-    module Graphics.GPipe.Orphans,    
+    module Graphics.GPipe.Orphans,
     module Linear,
     module Data.Boolean
 )
@@ -55,6 +56,7 @@ import Graphics.GPipe.PrimitiveStream
 import Graphics.GPipe.FragmentStream
 import Graphics.GPipe.FrameBuffer
 import Graphics.GPipe.GeometryStream
+import Graphics.GPipe.TransformFeedback
 import Graphics.GPipe.Shader
 import Graphics.GPipe.Expr
 import Graphics.GPipe.Uniform

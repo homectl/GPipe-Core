@@ -269,6 +269,7 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
 
         if all isNothing [mErrV, mErrG, mErrF]
             then do
+                liftIO $ putStrLn " ---- creating program ----"
                 pName <- glCreateProgram
                 glAttachShader pName vShader
 
@@ -353,7 +354,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
-            liftIO $ putStrLn " ---- creating renderer ----"
+            liftIO $ putStrLn " ---- render ----"
             rs <- lift $ lift get
             renv <- lift ask
             let (mFboKeyIO, blendIO) = fboSetup x
@@ -563,6 +564,7 @@ linkProgram name = do
 createUniformBuffer :: Integral a => a -> IO GLuint
 createUniformBuffer 0 = return undefined
 createUniformBuffer uSize = do
+    liftIO $ putStrLn " ---- creating uniform buffer ----"
     bname <- alloca $ \ ptr -> glGenBuffers 1 ptr >> peek ptr
     glBindBuffer GL_COPY_WRITE_BUFFER bname
     glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW
