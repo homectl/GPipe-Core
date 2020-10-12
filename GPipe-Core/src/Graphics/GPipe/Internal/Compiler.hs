@@ -277,6 +277,10 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
                 whenJust' ofShader $ glAttachShader pName
                 mapM_ (\(name, ix) -> withCString ("in"++ show name) $ glBindAttribLocation pName ix) $ zip inputs [0..]
 
+                case (feedbackBuffer drawcall, rasterizationName drawcall) of
+                    (Nothing, Just _) -> return ()
+                    (Just _, Just geoN) -> (transformFeedbackToRenderIO state ! geoN) undefined pName
+
                 mPErr <- linkProgram pName
 
                 glDetachShader pName vShader
@@ -354,7 +358,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
-            liftIO $ putStrLn " ---- render ----"
+            -- liftIO $ putStrLn " ---- render ----"
             rs <- lift $ lift get
             renv <- lift ask
             let (mFboKeyIO, blendIO) = fboSetup x
@@ -385,7 +389,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
             windowId <- case mFboKeyIO of
                 Left wid -> do -- Bind correct context
                     inwin wid $ do
-                        putStrLn " ---- binding (a) ----"
+                        -- putStrLn " ---- binding (a) ----"
                         glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                         return Nothing
                     return wid
@@ -394,7 +398,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     -- (something wrong here?)
                     (cwid, cd, doAsync) <- unRender getLastRenderWin
                     inwin cwid $ do
-                        putStrLn " ---- binding (b) ----"
+                        -- putStrLn " ---- binding (b) ----"
                         fbokey <- fboKeyIO
                         mfbo <- getFBO cd fbokey
                         case mfbo of
@@ -422,7 +426,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     Nothing -> return () -- Window deleted
                     Just (ws, doAsync) ->
                         liftIO $ do
-                            putStrLn " ---- drawing ----"
+                            -- putStrLn " ---- drawing ----"
                             let cd = windowContextData ws
                             key <- keyIO
                             mvao <- getVAO cd key
@@ -440,7 +444,7 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                             drawIO
 
     let deleter = do
-            putStrLn " ---- deleting ----"
+            -- putStrLn " ---- deleting ----"
             glDeleteProgram pName
             when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
 
@@ -495,7 +499,7 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
                     liftIO $ asSync doAsync $ do
                         pName' <- readIORef pNameRef -- Cant use pName, need to touch pNameRef
                         glUseProgram pName'
-                        (transformFeedbackToRenderIO state ! geoN) x pName'
+                        -- Too late: (transformFeedbackToRenderIO state ! geoN) x pName'
                         True <- bind uNameToRenderIOMap' (zip unis ubinds) x (const $ return True)
                         isOk <- bind (samplerNameToRenderIO state) (zip samps sbinds) x (return . not . (`Set.member` renderWriteTextures rs))
                         blendIO
@@ -516,7 +520,9 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
                                 setVAO cd key vao
                                 glBindVertexArray vao'
                                 vaoIO
-                        glBindTransformFeedback GL_TRANSFORM_FEEDBACK bName
+                        -- glBindTransformFeedback GL_TRANSFORM_FEEDBACK bName
+                        glBindBuffer GL_ARRAY_BUFFER bName
+                        glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
                         glBeginTransformFeedback GL_TRIANGLES
                         drawIO
                         glEndTransformFeedback

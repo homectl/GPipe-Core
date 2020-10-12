@@ -229,7 +229,7 @@ tellDrawcalls (FragmentStream xs) f = do
     mapM_ g xs
 
 makeDrawcall ::
-    ( ExprM (), -- sh - shader
+    (   ExprM (), -- sh - shader
         GlobDeclM (), -- shd - shader declarations
         s -> (Either WinId (IO FBOKeys, IO ()), IO ()) -- wOrIo - where to draw, as a window ID or a FBO (only this second case seems to be used)
     ) ->

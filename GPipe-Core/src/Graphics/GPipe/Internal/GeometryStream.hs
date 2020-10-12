@@ -300,6 +300,7 @@ endPrimitive g = S $ do
 
 class FragmentInput a => GeometryExplosive a where
     exploseGeometry :: a -> Int -> ExprM Int
+    declareGeometry :: a -> State Int (GlobDeclM ())
     enumerateVaryings :: a -> State Int [String]
 
 instance GeometryExplosive VFloat where
@@ -308,6 +309,14 @@ instance GeometryExplosive VFloat where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName STypeFloat
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -319,6 +328,14 @@ instance GeometryExplosive FlatVFloat where
         x' <- unS (unFlat x)
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName STypeFloat
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -330,6 +347,14 @@ instance GeometryExplosive NoPerspectiveVFloat where
         x' <- unS (unNPersp x)
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName STypeFloat
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -341,6 +366,14 @@ instance GeometryExplosive VInt where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName STypeInt
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -352,6 +385,14 @@ instance GeometryExplosive VWord where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName (STypeDyn "word")
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -363,6 +404,14 @@ instance GeometryExplosive VBool where
         x' <- unS x
         tellAssignment' name x'
         return (n + 1)
+    declareGeometry x = do
+        n <- get
+        put (n + 1)
+        let name = "vgf" ++ show n
+        return $ do
+            tellGlobal $ "out "
+            tellGlobal $ stypeName STypeBool
+            tellGlobalLn $ ' ':name
     enumerateVaryings x = do
         n <- get
         put (n + 1)
@@ -370,65 +419,95 @@ instance GeometryExplosive VBool where
 
 instance (GeometryExplosive a) => GeometryExplosive (V0 a) where
     exploseGeometry V0 = return
+    declareGeometry V0 = return (return ())
     enumerateVaryings V0 = return []
 
 instance (GeometryExplosive a) => GeometryExplosive (V1 a) where
     exploseGeometry (V1 x) n = do
         exploseGeometry x n
+    declareGeometry ~(V1 x) = do
+        declareGeometry x
     enumerateVaryings ~(V1 x) =
         enumerateVaryings x
 
 instance (GeometryExplosive a) => GeometryExplosive (V2 a) where
     exploseGeometry (V2 x y) n = do
         exploseGeometry x n >>= exploseGeometry y
+    declareGeometry ~(V2 x y) = do
+        ws <- sequence [declareGeometry x, declareGeometry y]
+        return $ sequence_ ws
     enumerateVaryings ~(V2 x y) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a) => GeometryExplosive (V3 a) where
     exploseGeometry (V3 x y z) n = do
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
+    declareGeometry ~(V3 x y z) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z]
+        return $ sequence_ ws
     enumerateVaryings ~(V3 x y z) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a) => GeometryExplosive (V4 a) where
     exploseGeometry (V4 x y z w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
+    declareGeometry ~(V4 x y z w) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z, declareGeometry w]
+        return $ sequence_ ws
     enumerateVaryings ~(V4 x y z w) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b) => GeometryExplosive (a,b) where
     exploseGeometry (x, y) n =
         exploseGeometry x n >>= exploseGeometry y
+    declareGeometry ~(x, y) = do
+        ws <- sequence [declareGeometry x, declareGeometry y]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c) => GeometryExplosive (a,b,c) where
     exploseGeometry (x, y, z) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z
+    declareGeometry ~(x, y, z) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y, z) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d) => GeometryExplosive (a,b,c,d) where
     exploseGeometry (x, y, z, w) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w
+    declareGeometry ~(x, y, z, w) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z, declareGeometry w]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y, z, w) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e) => GeometryExplosive (a,b,c,d,e) where
     exploseGeometry (x, y, z, w, r) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r
+    declareGeometry ~(x, y, z, w, r) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z, declareGeometry w, declareGeometry r]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y, z, w, r) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f) => GeometryExplosive (a,b,c,d,e,f) where
     exploseGeometry (x, y, z, w, r, s) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s
+    declareGeometry ~(x, y, z, w, r, s) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z, declareGeometry w, declareGeometry r, declareGeometry s]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y, z, w, r, s) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s]
 
 instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, GeometryExplosive d, GeometryExplosive e, GeometryExplosive f, GeometryExplosive g) => GeometryExplosive (a,b,c,d,e,f,g) where
     exploseGeometry (x, y, z, w, r, s, t) n =
         exploseGeometry x n >>= exploseGeometry y >>= exploseGeometry z >>= exploseGeometry w >>= exploseGeometry r >>= exploseGeometry s >>= exploseGeometry t
+    declareGeometry ~(x, y, z, w, r, s, t) = do
+        ws <- sequence [declareGeometry x, declareGeometry y, declareGeometry z, declareGeometry w, declareGeometry r, declareGeometry s, declareGeometry t]
+        return $ sequence_ ws
     enumerateVaryings ~(x, y, z, w, r, s, t) =
         concat <$> sequence [enumerateVaryings x, enumerateVaryings y, enumerateVaryings z, enumerateVaryings w, enumerateVaryings r, enumerateVaryings s, enumerateVaryings t]
 
@@ -467,7 +546,7 @@ generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
             let (side, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s
             in  if w < 0 || h < 0
                     then error "ViewPort, negative size"
-                    else do putStrLn " ---- generate and rasterize ----"
+                    else do -- putStrLn " ---- generate and rasterize ----"
                             setGlCullFace side
                             glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)

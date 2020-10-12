@@ -86,7 +86,7 @@ tests:
 
 executables:
     playground:
-        main: MainTest2.hs
+        main: MainTest.hs
         source-dirs:
         - src
         - playground

@@ -351,14 +351,21 @@ newBuffer' elementCount
     (buffer, nameRef, name) <- liftNonWinContextIO $ do
         putStrLn " ---- newBuffer ----"
         name <- alloca $ \ptr -> do
-            (if isJust elementCount then glGenBuffers else glGenTransformFeedbacks) 1 ptr
+            -- (if isJust elementCount then glGenBuffers else glGenTransformFeedbacks) 1 ptr
+            glGenBuffers 1 ptr
             peek ptr
         nameRef <- newIORef name
         uniAl <- getUniformAlignment
         let buffer = makeBuffer nameRef elementCount uniAl
         bname <- readIORef $ bufName buffer
-        glBindBuffer GL_COPY_WRITE_BUFFER bname
-        glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
+        if isJust elementCount
+            then do
+                glBindBuffer GL_COPY_WRITE_BUFFER bname
+                glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
+            else do
+                -- glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bname
+                glBindBuffer GL_COPY_WRITE_BUFFER bname
+                glBufferData GL_COPY_WRITE_BUFFER 100 nullPtr GL_STATIC_READ
         return (buffer, nameRef, name)
     addContextFinalizer nameRef $ with name ((if isJust elementCount then glDeleteBuffers else glDeleteTransformFeedbacks) 1)
     addVAOBufferFinalizer nameRef
@@ -384,15 +391,9 @@ writeBuffer buffer offset elems
             bname <- readIORef $ bufName buffer
             glBindBuffer GL_COPY_WRITE_BUFFER bname
             ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $maxElems * elemSize) (GL_MAP_WRITE_BIT + GL_MAP_FLUSH_EXPLICIT_BIT)
-            putStrLn " #1"
-            {-
             end <- bufferWriteInternal buffer ptr (take maxElems elems)
-            putStrLn " #2"
             glFlushMappedBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $ end `minusPtr` ptr)
-            putStrLn " #3"
             void $ glUnmapBuffer GL_COPY_WRITE_BUFFER
-            -}
-            putStrLn " #4"
 
 -- | Copies values from one buffer to another (of the same type).
 --

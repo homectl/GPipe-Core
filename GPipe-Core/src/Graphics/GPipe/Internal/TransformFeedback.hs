@@ -48,12 +48,9 @@ tellDrawcalls :: forall p a s c ds os. (PrimitiveTopology p, VertexInput a, Frag
     -> ShaderM s ()
 tellDrawcalls w (GeometryStream xs) buffer maxVertices =  mapM_ f xs where
     f (x, gsd@(GeometryStreamData n layoutName _)) = do
-        tellDrawcall $ makeDrawcall w buffer gsd $ do
-            declareGeometryLayout layoutName (toLayoutOut (undefined :: p)) maxVertices
-            x' <- unS x
-            return ()
 
-        let varyings = evalState (enumerateVaryings (undefined :: VertexFormat a)) 0
+        let shaderDeclarations = (evalState (declareGeometry (undefined :: VertexFormat a)) 0)
+            varyings = evalState (enumerateVaryings (undefined :: VertexFormat a)) 0
             varyingCount = length varyings
             bufferMode = GL_INTERLEAVED_ATTRIBS
             io s pName = do
@@ -62,16 +59,21 @@ tellDrawcalls w (GeometryStream xs) buffer maxVertices =  mapM_ f xs where
                     glTransformFeedbackVaryings pName (fromIntegral varyingCount) a bufferMode
                 mapM_ free names
 
+        tellDrawcall $ makeDrawcall w buffer gsd shaderDeclarations $ do
+            declareGeometryLayout layoutName (toLayoutOut (undefined :: p)) maxVertices
+            x' <- unS x
+            return ()
+
         modifyRenderIO (\s -> s { transformFeedbackToRenderIO = insert n io (transformFeedbackToRenderIO s) } )
 
 makeDrawcall :: forall a s c ds os. (VertexInput a) -- , GeometryExplosive a
     => Window os c ds
     -> Buffer os a
     -> GeometryStreamData
+    -> GlobDeclM ()
     -> ExprM ()
     -> IO (Drawcall s)
-makeDrawcall w buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shader = do
-    let shaderDeclarations = tellGlobalLn "// Meow!"
+makeDrawcall w buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shaderDeclarations shader = do
     (gsource, gunis, gsamps, _, prevShaderDeclarations, prevShader) <- runExprM shaderDeclarations shader
     (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevShaderDeclarations prevShader
     bufferName <- readIORef (bufName buffer)
@@ -87,6 +89,14 @@ makeDrawcall w buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuf
         [] []
         ubuff
 
+-- To be compiled with (glEnable GL_RASTERIZER_DISCARD).
+
+{-
+glBindTransformFeedback GL_TRANSFORM_FEEDBACK bname
+glBindBuffer GL_ARRAY_BUFFER bname
+glBufferData GL_ARRAY_BUFFER 100 nullPtr GL_STATIC_READ
+glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bname
+-}
 --------------------------------------------------------------------------------
 
 data ShaderStageInput = ShaderStageInput

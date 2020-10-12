@@ -159,9 +159,9 @@ toPrimitiveStream sf = Shader $ do
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
         drawcall (PrimitiveArraySimple p Nothing s a) binds = (attribs a binds,
-            glDrawTransformFeedback (toGLtopology p) (fromIntegral s))
+            glDrawTransformFeedback (toGLtopology p) (fromIntegral s)) -- glDrawTransformFeedbackStream?
         drawcall (PrimitiveArrayInstanced p (Just il) Nothing s a) binds = (attribs a binds,
-            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il))
+            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il)) -- glDrawTransformFeedbackStreamInstanced?
 
         drawcall (PrimitiveArraySimple p (Just l) s a) binds = (attribs a binds,
             glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
@@ -242,7 +242,7 @@ makeBindVertexFx norm x typ b = do
         (   do  bn <- readIORef $ bName b
                 return $ VAOKey bn combOffset x norm (bInstanceDiv b)
         ,   do  bn <- readIORef $ bName b
-                putStrLn " ---- bind vertex Fx ----"
+                -- putStrLn " ---- bind vertex Fx ----"
                 let ix' = fromIntegral ix
                 glEnableVertexAttribArray ix'
                 glBindBuffer GL_ARRAY_BUFFER bn
