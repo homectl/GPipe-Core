@@ -22,13 +22,14 @@ module Graphics.GPipe.PrimitiveStream (
 
     -- * Creating PrimitiveStreams
     toPrimitiveStream,
-   
-    -- * Various PrimitiveStream operations   
-    withInputIndices,   
+    toPrimitiveStream',
+
+    -- * Various PrimitiveStream operations
+    withInputIndices,
     InputIndices(..),
     withPointSize,
     PointSize
 )
 where
 
-import Graphics.GPipe.Internal.PrimitiveStream 
+import Graphics.GPipe.Internal.PrimitiveStream

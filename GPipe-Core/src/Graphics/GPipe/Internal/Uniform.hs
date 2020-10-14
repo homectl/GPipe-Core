@@ -51,7 +51,7 @@ getUniform sf = Shader $ do
         shaderGen = runReader $ runWriterT $ shaderGenF $ fromBUnifom $ bufBElement sampleBuffer $ BInput 0 0
     doForUniform blockId $ \s bind ->
         let (ub, i) = sf s
-        in  if i < 0 || i >= bufferLength' ub
+        in  if i < 0 || i >= bufferLength ub
             then error "toUniformBlock, uniform buffer offset out of bounds"
             else do
                 bname <- readIORef $ bufName ub

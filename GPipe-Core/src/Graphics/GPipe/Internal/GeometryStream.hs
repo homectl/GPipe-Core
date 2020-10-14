@@ -303,119 +303,55 @@ class FragmentInput a => GeometryExplosive a where
     declareGeometry :: a -> State Int (GlobDeclM ())
     enumerateVaryings :: a -> State Int [String]
 
+defaultExploseGeometry f x n = do
+    let name = "vgf" ++ show n
+    x' <- unS (f x)
+    tellAssignment' name x'
+    return (n + 1)
+
+defaultDeclareGeometry t x = do
+    n <- get
+    put (n + 1)
+    let name = "vgf" ++ show n
+    return $ do
+        tellGlobal $ "out "
+        tellGlobal $ stypeName t
+        tellGlobalLn $ ' ':name
+
+defaultEnumerateVaryings x = do
+    n <- get
+    put (n + 1)
+    return ["vgf" ++ show n]
+
 instance GeometryExplosive VFloat where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS x
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName STypeFloat
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry id
+    declareGeometry = defaultDeclareGeometry STypeFloat
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive FlatVFloat where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS (unFlat x)
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName STypeFloat
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry unFlat
+    declareGeometry = defaultDeclareGeometry STypeFloat
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive NoPerspectiveVFloat where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS (unNPersp x)
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName STypeFloat
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry unNPersp
+    declareGeometry = defaultDeclareGeometry STypeFloat
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive VInt where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS x
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName STypeInt
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry id
+    declareGeometry = defaultDeclareGeometry STypeInt
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive VWord where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS x
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName (STypeDyn "word")
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry id
+    declareGeometry = defaultDeclareGeometry STypeFloat
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive VBool where
-    exploseGeometry x n = do
-        let name = "vgf" ++ show n
-        x' <- unS x
-        tellAssignment' name x'
-        return (n + 1)
-    declareGeometry x = do
-        n <- get
-        put (n + 1)
-        let name = "vgf" ++ show n
-        return $ do
-            tellGlobal $ "out "
-            tellGlobal $ stypeName STypeBool
-            tellGlobalLn $ ' ':name
-    enumerateVaryings x = do
-        n <- get
-        put (n + 1)
-        return ["vgf" ++ show n]
+    exploseGeometry = defaultExploseGeometry id
+    declareGeometry = defaultDeclareGeometry STypeBool
+    enumerateVaryings = defaultEnumerateVaryings
 
 instance (GeometryExplosive a) => GeometryExplosive (V0 a) where
     exploseGeometry V0 = return

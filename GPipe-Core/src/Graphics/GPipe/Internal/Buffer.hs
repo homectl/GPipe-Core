@@ -7,7 +7,6 @@ module Graphics.GPipe.Internal.Buffer
     BufferFormat(..),
     BufferColor,
     Buffer(),
-    bufferLength',
     ToBuffer(..),
     B(..), B2(..), B3(..), B4(..),
     toB22, toB3, toB21, toB12, toB11,
@@ -76,20 +75,16 @@ data Buffer os b = Buffer
     ,   bufElementSize :: Int
         -- | Retrieve the number of elements in a buffer.
         -- Length of unsynchronized buffer is unknown (transform feedback usecase).
-    ,   bufferLength :: Maybe Int
+    ,   bufferLength :: Int
     ,   bufBElement :: BInput -> b
     ,   bufWriter :: Ptr () -> HostFormat b -> IO ()
     }
-
-bufferLength' b = case bufferLength b of
-    Nothing -> error "Unsynchronized buffer!"
-    Just l -> l
 
 instance Eq (Buffer os b) where
     a == b = bufName a == bufName b
 
 bufSize :: forall os b. Buffer os b -> Int
-bufSize b = bufElementSize b * bufferLength' b
+bufSize b = bufElementSize b * bufferLength b
 
 type BufferName = IORef GLuint
 type Offset = Int
@@ -342,32 +337,25 @@ instance BufferFormat a => BufferFormat (Plucker a) where
 
 -- | Create a buffer with a specified number of elements.
 newBuffer :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Int -> ContextT ctx os m (Buffer os b)
-newBuffer elementCount = newBuffer' (Just elementCount)
+newBuffer elementCount = newBuffer' False elementCount
 
-newBuffer' :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Maybe Int -> ContextT ctx os m (Buffer os b)
-newBuffer' elementCount
-    | maybe False (< 0) elementCount = error "newBuffer, length negative"
+newBuffer' :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Bool -> Int -> ContextT ctx os m (Buffer os b)
+newBuffer' feedback elementCount
+    | elementCount < 0 = error "newBuffer, length negative"
     | otherwise = do
     (buffer, nameRef, name) <- liftNonWinContextIO $ do
         putStrLn " ---- newBuffer ----"
         name <- alloca $ \ptr -> do
-            -- (if isJust elementCount then glGenBuffers else glGenTransformFeedbacks) 1 ptr
             glGenBuffers 1 ptr
             peek ptr
         nameRef <- newIORef name
         uniAl <- getUniformAlignment
         let buffer = makeBuffer nameRef elementCount uniAl
         bname <- readIORef $ bufName buffer
-        if isJust elementCount
-            then do
-                glBindBuffer GL_COPY_WRITE_BUFFER bname
-                glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
-            else do
-                -- glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bname
-                glBindBuffer GL_COPY_WRITE_BUFFER bname
-                glBufferData GL_COPY_WRITE_BUFFER 100 nullPtr GL_STATIC_READ
+        glBindBuffer GL_COPY_WRITE_BUFFER bname
+        glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr (if feedback then GL_STATIC_READ else GL_STREAM_DRAW)
         return (buffer, nameRef, name)
-    addContextFinalizer nameRef $ with name ((if isJust elementCount then glDeleteBuffers else glDeleteTransformFeedbacks) 1)
+    addContextFinalizer nameRef $ with name (glDeleteBuffers 1)
     addVAOBufferFinalizer nameRef
     return buffer
 
@@ -380,9 +368,9 @@ bufferWriteInternal _ ptr [] = return ptr
 -- | Write a buffer from the host (i.e. the normal Haskell world).
 writeBuffer :: (ContextHandler ctx, MonadIO m) => Buffer os b -> BufferStartPos -> [HostFormat b] -> ContextT ctx os m ()
 writeBuffer buffer offset elems
-    | offset < 0 || offset >= bufferLength' buffer = error "writeBuffer, offset out of bounds"
+    | offset < 0 || offset >= bufferLength buffer = error "writeBuffer, offset out of bounds"
     | otherwise =
-        let maxElems = max 0 $ bufferLength' buffer - offset
+        let maxElems = max 0 $ bufferLength buffer - offset
             elemSize = bufElementSize buffer
             off = fromIntegral $ offset * elemSize
 
@@ -400,11 +388,11 @@ writeBuffer buffer offset elems
 --   @copyBuffer fromBuffer fromStart toBuffer toStart length@ will copy @length@ elements from position @fromStart@ in @fromBuffer@ to position @toStart@ in @toBuffer@.
 copyBuffer :: (ContextHandler ctx, MonadIO m) => Buffer os b -> BufferStartPos -> Buffer os b -> BufferStartPos -> Int -> ContextT ctx os m ()
 copyBuffer bFrom from bTo to len
-    | from < 0 || from >= bufferLength' bFrom = error "writeBuffer, source offset out of bounds"
-    | to < 0 || to >= bufferLength' bTo = error "writeBuffer, destination offset out of bounds"
+    | from < 0 || from >= bufferLength bFrom = error "writeBuffer, source offset out of bounds"
+    | to < 0 || to >= bufferLength bTo = error "writeBuffer, destination offset out of bounds"
     | len < 0 = error "writeBuffer, length negative"
-    | len + from > bufferLength' bFrom = error "writeBuffer, source buffer too small"
-    | len + to > bufferLength' bTo = error "writeBuffer, destination buffer too small"
+    | len + from > bufferLength bFrom = error "writeBuffer, source buffer too small"
+    | len + to > bufferLength bTo = error "writeBuffer, destination buffer too small"
     | otherwise = liftNonWinContextAsyncIO $ do
         putStrLn " ---- copyBuffer' ----"
         bnamef <- readIORef $ bufName bFrom
@@ -445,7 +433,7 @@ setWriterAlignM a = do
 getUniformAlignment :: IO Int
 getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT ptr >> peek ptr)
 
-makeBuffer :: forall os b. BufferFormat b => BufferName -> Maybe Int -> UniformAlignment -> Buffer os b
+makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment  = do
     let ToBuffer skipIt readIt writeIt alignMode = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b

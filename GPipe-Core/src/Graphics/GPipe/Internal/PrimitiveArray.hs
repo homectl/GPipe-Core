@@ -20,7 +20,7 @@ import           Graphics.GL.Types
 --   A @VertexArray t a@ has elements of type @a@, and @t@ indicates whether the vertex array may be used as instances or not.
 data VertexArray t a = VertexArray  {
     -- | Retrieve the number of elements in a 'VertexArray'.
-    vertexArrayLength :: Maybe Int,
+    vertexArrayLength :: Int,
     vertexArraySkip :: Int,
     bArrBFunc:: BInput -> a
     }
@@ -50,19 +50,17 @@ type family Combine t t' where
 
 -- | @takeVertices n a@ creates a shorter vertex array by taking the @n@ first elements of the array @a@.
 takeVertices :: Int -> VertexArray t a -> VertexArray t a
-takeVertices n (VertexArray l s f) = VertexArray (min (max n 0) <$> l) s f
+takeVertices n (VertexArray l s f) = VertexArray (min (max n 0) l) s f
 
 -- | @dropVertices n a@ creates a shorter vertex array by dropping the @n@ first elements of the array @a@. The argument array @a@ must not be
 --   constrained to only 'Instances'.
 dropVertices :: Int -> VertexArray () a -> VertexArray t a
-dropVertices n (VertexArray ml s f) = case ml of
-    Nothing -> VertexArray Nothing s f
-    Just l -> VertexArray (Just (l - n')) (s+n') f where n' = min (max n 0) l
+dropVertices n (VertexArray l s f) = VertexArray (l - n') (s+n') f where n' = min (max n 0) l
 
 -- | @replicateEach n a@ will create a longer vertex array, only to be used for instances, by replicating each element of the array @a@ @n@ times. E.g.
 --   @replicateEach 3 {ABCD...}@ will yield @{AAABBBCCCDDD...}@. This is particulary useful before zipping the array with another that has a different replication rate.
 replicateEach :: Int -> VertexArray t a -> VertexArray Instances a
-replicateEach n (VertexArray m s f) = VertexArray ((n *) <$> m) s (\x -> f $ x {bInInstanceDiv = bInInstanceDiv x * n})
+replicateEach n (VertexArray l s f) = VertexArray (n * l) s (\x -> f $ x {bInInstanceDiv = bInInstanceDiv x * n})
 
 type family IndexFormat a where
     IndexFormat (B Word32) = Word32
@@ -83,9 +81,7 @@ data IndexArray = IndexArray {
 -- | Create an 'IndexArray' from a 'Buffer' of unsigned integers (as constrained by the closed 'IndexFormat' type family instances). The index array will have the same number of elements as the buffer, use 'takeIndices' and 'dropIndices' to make it smaller.
 --   The @Maybe a@ argument is used to optionally denote a primitive restart index.
 newIndexArray :: forall os f b a. (BufferFormat b, Integral a, IndexFormat b ~ a) => Buffer os b -> Maybe a -> Render os IndexArray
-newIndexArray buf r = case bufferLength buf of
-    Nothing -> error "Unsynchronized buffer cannot be used for index array."
-    Just l -> let a = undefined :: b in Render $ return $ IndexArray (bufName buf) l 0 (fmap fromIntegral r) (getGlType a)
+newIndexArray buf r = let a = undefined :: b in Render $ return $ IndexArray (bufName buf) (bufferLength buf) 0 (fmap fromIntegral r) (getGlType a)
 
 -- | @takeIndices n a@ creates a shorter index array by taking the @n@ first indices of the array @a@.
 takeIndices :: Int -> IndexArray -> IndexArray
@@ -148,10 +144,10 @@ type InstanceCount = Int
 type BaseVertex = Int
 
 -- PrimitiveTopology p =>
-data PrimitiveArrayInt p a = PrimitiveArraySimple p (Maybe Int) BaseVertex a
+data PrimitiveArrayInt p a = PrimitiveArraySimple p Int BaseVertex a
                            | PrimitiveArrayIndexed p IndexArray BaseVertex a
-                           | PrimitiveArrayInstanced p (Maybe InstanceCount) (Maybe Int) BaseVertex a
-                           | PrimitiveArrayIndexedInstanced p IndexArray (Maybe InstanceCount) BaseVertex a
+                           | PrimitiveArrayInstanced p InstanceCount Int BaseVertex a
+                           | PrimitiveArrayIndexedInstanced p IndexArray InstanceCount BaseVertex a
 
 -- | An array of primitives
 newtype PrimitiveArray p a = PrimitiveArray {getPrimitiveArray :: [PrimitiveArrayInt p a]}
