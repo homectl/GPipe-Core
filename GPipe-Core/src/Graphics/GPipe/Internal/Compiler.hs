@@ -27,8 +27,6 @@ import Control.Exception (throwIO)
 import Data.IORef
 import Data.List (zip5)
 import Data.Word
-import Data.Monoid ((<>))
-import Graphics.GPipe.Internal.Debug
 
 -- public
 type WinId = Int
@@ -269,7 +267,6 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
 
         if all isNothing [mErrV, mErrG, mErrF]
             then do
-                liftIO $ putStrLn " ---- creating program ----"
                 pName <- glCreateProgram
                 glAttachShader pName vShader
 
@@ -358,7 +355,6 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
 
     -- Drawing with the program.
     let renderer = \x -> Render $ do
-            -- liftIO $ putStrLn " ---- render ----"
             rs <- lift $ lift get
             renv <- lift ask
             let (mFboKeyIO, blendIO) = fboSetup x
@@ -389,7 +385,6 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
             windowId <- case mFboKeyIO of
                 Left wid -> do -- Bind correct context
                     inwin wid $ do
-                        -- putStrLn " ---- binding (a) ----"
                         glBindFramebuffer GL_DRAW_FRAMEBUFFER 0
                         return Nothing
                     return wid
@@ -398,7 +393,6 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     -- (something wrong here?)
                     (cwid, cd, doAsync) <- unRender getLastRenderWin
                     inwin cwid $ do
-                        -- putStrLn " ---- binding (b) ----"
                         fbokey <- fboKeyIO
                         mfbo <- getFBO cd fbokey
                         case mfbo of
@@ -426,7 +420,6 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                     Nothing -> return () -- Window deleted
                     Just (ws, doAsync) ->
                         liftIO $ do
-                            -- putStrLn " ---- drawing ----"
                             let cd = windowContextData ws
                             key <- keyIO
                             mvao <- getVAO cd key
@@ -444,7 +437,6 @@ createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN = do
                             drawIO
 
     let deleter = do
-            -- putStrLn " ---- deleting ----"
             glDeleteProgram pName
             when (pstrUSize > 0) $ with pstrUBuf (glDeleteBuffers 1)
 
@@ -520,11 +512,13 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
                                 setVAO cd key vao
                                 glBindVertexArray vao'
                                 vaoIO
-                        -- glBindTransformFeedback GL_TRANSFORM_FEEDBACK bName
+                        -- We don’t really need GL_TRANSFORM_FEEDBACK(_BUFFER) for now.
                         glBindBuffer GL_ARRAY_BUFFER bName
                         glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
                         glBeginTransformFeedback GL_TRIANGLES
+                        glEnable GL_RASTERIZER_DISCARD
                         drawIO
+                        glDisable GL_RASTERIZER_DISCARD
                         glEndTransformFeedback
 
     let deleter = do
@@ -570,7 +564,6 @@ linkProgram name = do
 createUniformBuffer :: Integral a => a -> IO GLuint
 createUniformBuffer 0 = return undefined
 createUniformBuffer uSize = do
-    liftIO $ putStrLn " ---- creating uniform buffer ----"
     bname <- alloca $ \ ptr -> glGenBuffers 1 ptr >> peek ptr
     glBindBuffer GL_COPY_WRITE_BUFFER bname
     glBufferData GL_COPY_WRITE_BUFFER (fromIntegral uSize) nullPtr GL_STREAM_DRAW

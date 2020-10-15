@@ -15,7 +15,7 @@ import Data.SNMap
 import qualified Data.IntMap as Map
 import Data.Boolean
 import Data.List (intercalate)
-import Control.Applicative ((<$>), liftA, liftA2, liftA3)
+import Control.Applicative (liftA, liftA2, liftA3)
 import Linear.V4
 import Linear.V3
 import Linear.V2
@@ -26,7 +26,7 @@ import Linear.Metric
 import Linear.Matrix
 import Linear.Vector
 import Linear.Conjugate
-import Data.Foldable (toList, Foldable)
+import Data.Foldable (Foldable(toList))
 import Data.Int
 import Data.Word
 
@@ -130,6 +130,38 @@ runExprM d m = do
             , "}\n"
             ]
     return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
+
+--------------------------------------------------------------------------------
+-- The section below is just an unused draft.
+--------------------------------------------------------------------------------
+
+data ShaderStageInput = ShaderStageInput
+    {    -- The output declarations to include in the shader's source.
+        outputDeclarations :: GlobDeclM ()
+        -- The expression to evaluate as a source using variables to be provided
+        -- by a previous shader (or buffer object). The top level of this
+        -- expression is expected (how exactly?) to assign a value to the output
+        -- variables declared above.
+    ,   expression :: ExprM ()
+    }
+
+data ShaderStageOutput = ShaderStageOutput
+    {   source :: String -- ^ The shader GLSL source to be compiled.
+    ,   uniforms :: [Int] -- ^ The uniforms used in this shader.
+    ,   samplers :: [Int] -- ^ The samplers used in this shader.
+    ,   inputs :: [Int] -- ^ The input variables used in this shader.
+    ,   previousDeclarations :: GlobDeclM () -- ^ The output declations to include in the previous shader to provide the needed input variables.
+    ,   prevExpression :: ExprM () -- ^ The expression to evaluate in order to produce the previous shader.
+    }
+
+evaluateExpression :: [ExprM ()] -> ExprM () -> GlobDeclM () -> IO ShaderStageOutput
+evaluateExpression staticExpressions expression requiredOutputDeclarations = do
+    (s, u, ss, is, pds, pe) <- runExprM requiredOutputDeclarations expression
+    case staticExpressions of
+        (se:ses) -> evaluateExpression ses (pe >> se) pds
+        [] -> return $ ShaderStageOutput s u ss is pds pe
+
+--------------------------------------------------------------------------------
 
 newtype S x a = S { unS :: ExprM String }
 

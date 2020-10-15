@@ -5,3 +5,5 @@ this branch goes further by adding transform feedback and refactoring code more 
 I'm actually entertaining the idea of rewriting GPipe 2 in [a literal way](https://wiki.haskell.org/Literate_programming),
 remembering how hard it was for me to make sense of the original code base.
 
+Note: you need a modified GPipe-GLFW library configured to use an OpenGL Core Profile 4.0 (or higher).
+

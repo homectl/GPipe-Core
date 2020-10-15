@@ -7,7 +7,6 @@ import Graphics.GPipe.Internal.Shader
 #if __GLASGOW_HASKELL__ < 804
 import Data.Semigroup
 #endif
-import Data.Monoid hiding ((<>))
 import Data.IORef
 
 import Data.Word

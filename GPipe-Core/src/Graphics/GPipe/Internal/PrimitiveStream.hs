@@ -18,7 +18,6 @@ import Graphics.GPipe.Internal.Uniform
 import Control.Category
 import Control.Arrow
 import Control.Monad (void)
-import Data.Monoid (Monoid(..))
 #if __GLASGOW_HASKELL__ < 804
 import Data.Semigroup (Semigroup(..))
 #endif
@@ -132,7 +131,7 @@ toPrimitiveStream = toPrimitiveStream' False
 
 -- | Create a primitive stream from a primitive array provided from the shader environment.
 toPrimitiveStream' :: forall os f s a p. (PrimitiveTopology p, VertexInput a) => Bool -> (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
-toPrimitiveStream' withTransformFeedback sf = Shader $ do
+toPrimitiveStream' contentFromTransformFeedback sf = Shader $ do
 
     -- Get a unique (OpenGL) name for this shader by updating the 'ShaderState' (a pair of the next name and a 'RenderIOState s') from the ReaderT/WriterT/ListM/State.
     n <- getNewName
@@ -149,7 +148,7 @@ toPrimitiveStream' withTransformFeedback sf = Shader $ do
             (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
 
     -- Register the actual OpenGL bind and draw commands for this shader name.
-    doForInputArray n (map (drawcall withTransformFeedback) . getPrimitiveArray . sf)
+    doForInputArray n (map (drawcall contentFromTransformFeedback) . getPrimitiveArray . sf)
 
     return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n uSize))]
 
@@ -160,10 +159,10 @@ toPrimitiveStream' withTransformFeedback sf = Shader $ do
             (Kleisli makeBind) -- To construct the VAO.
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
-        drawcall True (PrimitiveArraySimple p l s a) binds = (attribs a binds,
-            glDrawTransformFeedback (toGLtopology p) (fromIntegral s)) -- glDrawTransformFeedbackStream?
-        drawcall True (PrimitiveArrayInstanced p il l s a) binds = (attribs a binds,
-            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il)) -- glDrawTransformFeedbackStreamInstanced?
+        drawcall True (PrimitiveArraySimple p _ s a) binds = (attribs a binds,
+            glDrawTransformFeedback (toGLtopology p) (fromIntegral s))
+        drawcall True (PrimitiveArrayInstanced p il _ s a) binds = (attribs a binds,
+            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il))
 
         drawcall False (PrimitiveArraySimple p l s a) binds = (attribs a binds,
             glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
@@ -244,7 +243,6 @@ makeBindVertexFx norm x typ b = do
         (   do  bn <- readIORef $ bName b
                 return $ VAOKey bn combOffset x norm (bInstanceDiv b)
         ,   do  bn <- readIORef $ bName b
-                -- putStrLn " ---- bind vertex Fx ----"
                 let ix' = fromIntegral ix
                 glEnableVertexAttribArray ix'
                 glBindBuffer GL_ARRAY_BUFFER bn

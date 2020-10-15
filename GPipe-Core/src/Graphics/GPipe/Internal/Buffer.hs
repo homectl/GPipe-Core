@@ -13,7 +13,6 @@ module Graphics.GPipe.Internal.Buffer
     Uniform(..), Normalized(..), BPacked(),
     BInput(..),
     newBuffer,
-    newBuffer',
     writeBuffer,
     copyBuffer,
     BufferStartPos,
@@ -41,8 +40,6 @@ import Control.Monad.Trans.Writer.Strict
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Data.IORef
-import Data.Maybe
-import Control.Applicative ((<$>))
 import Linear.V4
 import Linear.V3
 import Linear.V2
@@ -337,14 +334,10 @@ instance BufferFormat a => BufferFormat (Plucker a) where
 
 -- | Create a buffer with a specified number of elements.
 newBuffer :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Int -> ContextT ctx os m (Buffer os b)
-newBuffer elementCount = newBuffer' False elementCount
-
-newBuffer' :: (MonadIO m, BufferFormat b, ContextHandler ctx) => Bool -> Int -> ContextT ctx os m (Buffer os b)
-newBuffer' feedback elementCount
+newBuffer elementCount
     | elementCount < 0 = error "newBuffer, length negative"
     | otherwise = do
     (buffer, nameRef, name) <- liftNonWinContextIO $ do
-        putStrLn " ---- newBuffer ----"
         name <- alloca $ \ptr -> do
             glGenBuffers 1 ptr
             peek ptr
@@ -353,7 +346,7 @@ newBuffer' feedback elementCount
         let buffer = makeBuffer nameRef elementCount uniAl
         bname <- readIORef $ bufName buffer
         glBindBuffer GL_COPY_WRITE_BUFFER bname
-        glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr (if feedback then GL_STATIC_READ else GL_STREAM_DRAW)
+        glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
         return (buffer, nameRef, name)
     addContextFinalizer nameRef $ with name (glDeleteBuffers 1)
     addVAOBufferFinalizer nameRef
@@ -375,7 +368,6 @@ writeBuffer buffer offset elems
             off = fromIntegral $ offset * elemSize
 
         in liftNonWinContextAsyncIO $ do
-            putStrLn " ---- writeBuffer ----"
             bname <- readIORef $ bufName buffer
             glBindBuffer GL_COPY_WRITE_BUFFER bname
             ptr <- glMapBufferRange GL_COPY_WRITE_BUFFER off (fromIntegral $maxElems * elemSize) (GL_MAP_WRITE_BIT + GL_MAP_FLUSH_EXPLICIT_BIT)
@@ -394,7 +386,6 @@ copyBuffer bFrom from bTo to len
     | len + from > bufferLength bFrom = error "writeBuffer, source buffer too small"
     | len + to > bufferLength bTo = error "writeBuffer, destination buffer too small"
     | otherwise = liftNonWinContextAsyncIO $ do
-        putStrLn " ---- copyBuffer' ----"
         bnamef <- readIORef $ bufName bFrom
         bnamet <- readIORef $ bufName bTo
         glBindBuffer GL_COPY_READ_BUFFER bnamef

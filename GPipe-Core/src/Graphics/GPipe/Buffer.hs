@@ -37,7 +37,6 @@ module Graphics.GPipe.Buffer (
 
     -- * Operating on Buffers
     newBuffer,
-    newBuffer',
     bufferLength,
     writeBuffer,
     copyBuffer,
@@ -51,7 +50,6 @@ where
 import Graphics.GPipe.Internal.Buffer
     ( copyBuffer,
       newBuffer,
-      newBuffer',
       writeBuffer,
       B,
       B2,

@@ -20,7 +20,6 @@ import Foreign.Marshal.Alloc
 import Foreign.Marshal.Utils
 import Control.Monad
 import Data.IORef
-import Control.Applicative
 import Control.Monad.Exception (bracket, MonadAsyncException)
 import Linear.V4
 import Linear.V3

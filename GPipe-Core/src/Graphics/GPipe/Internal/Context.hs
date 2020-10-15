@@ -36,7 +36,6 @@ import Control.Monad.Trans.Reader
 import qualified Control.Monad.Fail as MF
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
-import Control.Applicative (Applicative, (<$>))
 import Data.Typeable
 import qualified Data.IntSet as Set
 import qualified Data.IntMap.Strict as IMap
@@ -47,13 +46,10 @@ import Graphics.GL.Types
 import Control.Concurrent.MVar
 import Data.IORef
 import Control.Monad
-import Data.List (delete)
-import Foreign.C.Types
 import Data.Maybe
 import Linear.V2 (V2(V2))
 import Control.Monad.Trans.Except
 import Control.Exception (throwIO)
-import Control.Arrow
 import Control.Monad.Trans.State.Strict
 
 -- | Class implementing a window handler that can create openGL contexts, such as GLFW or GLUT

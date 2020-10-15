@@ -5,25 +5,19 @@ module Graphics.GPipe.Internal.TransformFeedback where
 import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Expr
-import Graphics.GPipe.Internal.Format
-import Graphics.GPipe.Internal.FragmentStream
 import Graphics.GPipe.Internal.GeometryStream
 import Graphics.GPipe.Internal.PrimitiveStream
 import Graphics.GPipe.Internal.PrimitiveArray
 import Graphics.GPipe.Internal.Buffer
 import Graphics.GPipe.Internal.Shader
-import Graphics.GPipe.Internal.Texture
 
 import Graphics.GL.Core45
-import Graphics.GL.Types
 
 import Data.IORef
 import Data.IntMap.Lazy (insert)
-import Foreign ({-Ptr, plusPtr, castPtr,-} nullPtr {-, sizeOf, with-})
 import Foreign.C.String
 import Foreign.Marshal
 import Control.Monad.Trans.State
-import Graphics.GPipe.Internal.Debug
 
 drawNothing :: forall p a s c ds os f. (PrimitiveTopology p, VertexInput a, FragmentInputFromGeometry p (VertexFormat a), GeometryExplosive (VertexFormat a))
     => Window os c ds
@@ -54,7 +48,7 @@ tellDrawcalls w (GeometryStream xs) buffer maxVertices =  mapM_ f xs where
             varyingCount = length varyings
             bufferMode = GL_INTERLEAVED_ATTRIBS
             io s pName = do
-                names <- mapM newCString (traceList "varyings" varyings)
+                names <- mapM newCString varyings
                 withArray names $ \a -> do
                     glTransformFeedbackVaryings pName (fromIntegral varyingCount) a bufferMode
                 mapM_ free names
@@ -88,39 +82,3 @@ makeDrawcall w buffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuf
         gunis gsamps
         [] []
         ubuff
-
--- To be compiled with (glEnable GL_RASTERIZER_DISCARD).
-
-{-
-glBindTransformFeedback GL_TRANSFORM_FEEDBACK bname
-glBindBuffer GL_ARRAY_BUFFER bname
-glBufferData GL_ARRAY_BUFFER 100 nullPtr GL_STATIC_READ
-glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bname
--}
---------------------------------------------------------------------------------
-
-data ShaderStageInput = ShaderStageInput
-    {    -- The output declarations to include in the shader's source.
-        outputDeclarations :: GlobDeclM ()
-        -- The expression to evaluate as a source using variables to be provided
-        -- by a previous shader (or buffer object). The top level of this
-        -- expression is expected (how exactly?) to assign a value to the output
-        -- variables declared above.
-    ,   expression :: ExprM ()
-    }
-
-data ShaderStageOutput = ShaderStageOutput
-    {   source :: String -- ^ The shader GLSL source to be compiled.
-    ,   uniforms :: [Int] -- ^ The uniforms used in this shader.
-    ,   samplers :: [Int] -- ^ The samplers used in this shader.
-    ,   inputs :: [Int] -- ^ The input variables used in this shader.
-    ,   previousDeclarations :: GlobDeclM () -- ^ The output declations to include in the previous shader to provide the needed input variables.
-    ,   prevExpression :: ExprM () -- ^ The expression to evaluate in order to produce the previous shader.
-    }
-
-evaluateExpression :: [ExprM ()] -> ExprM () -> GlobDeclM () -> IO ShaderStageOutput
-evaluateExpression staticExpressions expression requiredOutputDeclarations = do
-    (s, u, ss, is, pds, pe) <- runExprM requiredOutputDeclarations expression
-    case staticExpressions of
-        (se:ses) -> evaluateExpression ses (pe >> se) pds
-        [] -> return $ ShaderStageOutput s u ss is pds pe

@@ -26,17 +26,14 @@ import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Buffer
 import Control.Monad
 import Control.Monad.Trans.State
-import qualified Control.Monad.Trans.State.Strict as StrictState
 import Control.Monad.IO.Class
-import qualified Data.IntSet as Set
 import Control.Monad.Trans.Writer.Lazy (tell, WriterT(..), execWriterT)
 import Control.Monad.Exception (MonadException)
-import Control.Applicative (Applicative, Alternative, (<|>))
+import Control.Applicative (Alternative, (<|>))
 import Control.Monad.Trans.Class (lift)
 import Data.Maybe (fromJust, isJust, isNothing)
-import Control.Monad (MonadPlus, when)
 import Control.Monad.Trans.List (ListT(..))
-import Data.Monoid (All(..), mempty)
+import Data.Monoid (All(..))
 import Data.Either
 import Control.Monad.Trans.Reader
 import Data.List (find)

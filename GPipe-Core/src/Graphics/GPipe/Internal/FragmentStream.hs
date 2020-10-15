@@ -8,9 +8,7 @@ import Graphics.GPipe.Internal.Expr
 import Graphics.GPipe.Internal.Shader
 import Graphics.GPipe.Internal.Compiler
 import Graphics.GPipe.Internal.PrimitiveStream
-import Graphics.GPipe.Internal.PrimitiveArray
 import Control.Monad.Trans.State.Lazy
-import Data.Monoid (Monoid)
 #if __GLASGOW_HASKELL__ < 804
 import Data.Semigroup (Semigroup(..))
 #endif
@@ -26,7 +24,6 @@ import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 
 import Graphics.GL.Core45
-import Control.Monad (when)
 import Data.Maybe (isJust)
 
 type VPos = V4 VFloat
@@ -83,7 +80,6 @@ rasterize sf (PrimitiveStream xs) = Shader $ do
             in  if w < 0 || h < 0
                     then error "ViewPort, negative size"
                     else do setGlCullFace side
-                            -- putStrLn " ---- rasterize ----"
                             glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glDepthRange (realToFrac dmin) (realToFrac dmax)

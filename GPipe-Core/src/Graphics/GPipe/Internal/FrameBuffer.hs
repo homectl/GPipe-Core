@@ -3,8 +3,6 @@
 {-# LANGUAGE TupleSections #-}
 
 module Graphics.GPipe.Internal.FrameBuffer where
-
-import Control.Applicative
 import Control.Monad (void, when)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Class
@@ -15,7 +13,6 @@ import Control.Monad.Trans.Writer.Lazy
 import Data.IORef
 import qualified Data.IntMap as IMap
 import Data.List (intercalate)
-import Data.Word (Word)
 import Foreign.Marshal.Alloc
 import Foreign.Marshal.Array (withArray)
 import Foreign.Marshal.Utils
