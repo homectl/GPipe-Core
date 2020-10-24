@@ -11,7 +11,9 @@ module Graphics.GPipe.GeometryStream (
     generativeLineStrip,
     generativeTriangleStrip,
     emitVertex,
-    emitVertex',
+    emitVertexPosition,
+    emitVertexLayer,
+    emitVertexPositionAndLayer,
     endPrimitive,
 )
 where

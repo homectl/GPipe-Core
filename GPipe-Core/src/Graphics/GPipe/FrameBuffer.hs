@@ -40,6 +40,8 @@ module Graphics.GPipe.FrameBuffer (
     getTexture3DImage,
     getTextureCubeImage,
 
+    getLayeredTextureImage,
+
     -- * Clearing the context window
     -- | Use these functions to clear the color, depth or stencil values in the context's window
     clearWindowColor,

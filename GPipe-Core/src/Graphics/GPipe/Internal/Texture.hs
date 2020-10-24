@@ -1173,31 +1173,77 @@ getTexture2DImage :: Texture2D os f -> Level -> Render os (Image f)
 getTexture2DArrayImage :: Texture2DArray os f -> Level -> Int -> Render os (Image f)
 getTexture3DImage :: Texture3D os f -> Level -> Int -> Render os (Image f)
 getTextureCubeImage :: TextureCube os f -> Level -> CubeSide -> Render os (Image f)
+getLayeredTextureImage :: Texture3D os f -> MaxLevels -> Render os (Image f)
 
 registerRenderWriteTextureName tn = Render (lift $ lift $ lift $ readIORef tn) >>= registerRenderWriteTexture . fromIntegral
 
-getTexture1DImage t@(Texture1D tn _ ls) l' = let l = min ls l' in do registerRenderWriteTextureName tn
-                                                                     return $ Image tn 0 l (V2 (texture1DSizes t !! l) 1) $ \attP -> do { n <- readIORef tn; glFramebufferTexture1D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_1D n (fromIntegral l) }
-getTexture1DArrayImage t@(Texture1DArray tn _ ls) l' y' = let l = min ls l'
-                                                              V2 x y = texture1DArraySizes t !! l
-                                                          in do registerRenderWriteTextureName tn
-                                                                return $ Image tn y' l (V2 x 1) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1)) }
-getTexture2DImage t@(Texture2D tn _ ls) l' = let l = min ls l' in do registerRenderWriteTextureName tn
-                                                                     return $ Image tn 0 l (texture2DSizes t !! l) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_2D n (fromIntegral l) }
-getTexture2DImage t@(RenderBuffer2D tn _) _ = return $ Image tn (-1) 0 (head $ texture2DSizes t) $ \attP -> do { n <- readIORef tn; glFramebufferRenderbuffer GL_DRAW_FRAMEBUFFER attP GL_RENDERBUFFER n }
-getTexture2DArrayImage t@(Texture2DArray tn _ ls) l' z' = let l = min ls l'
-                                                              V3 x y z = texture2DArraySizes t !! l
-                                                          in do registerRenderWriteTextureName tn
-                                                                return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
-getTexture3DImage t@(Texture3D tn _ ls) l' z' = let l = min ls l'
-                                                    V3 x y z = texture3DSizes t !! l
-                                                in do registerRenderWriteTextureName tn
-                                                      return $ Image tn z' l (V2 x y) $ \attP -> do { n <- readIORef tn; glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1)) }
-getTextureCubeImage t@(TextureCube tn _ ls) l' s = let l = min ls l'
-                                                       x = textureCubeSizes t !! l
-                                                       s' = getGlCubeSide s
-                                                   in do registerRenderWriteTextureName tn
-                                                         return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do { n <- readIORef tn; glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP s' n (fromIntegral l) }
+getTexture1DImage t@(Texture1D tn _ ls) l' =
+    let l = min ls l'
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn 0 l (V2 (texture1DSizes t !! l) 1) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTexture1D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_1D n (fromIntegral l)
+
+getTexture1DArrayImage t@(Texture1DArray tn _ ls) l' y' =
+    let l = min ls l'
+        V2 x y = texture1DArraySizes t !! l
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn y' l (V2 x 1) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min y' (y-1))
+
+getTexture2DImage t@(Texture2D tn _ ls) l' =
+    let l = min ls l'
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn 0 l (texture2DSizes t !! l) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP GL_TEXTURE_2D n (fromIntegral l)
+
+getTexture2DImage t@(RenderBuffer2D tn _) _ =
+    return $ Image tn (-1) 0 (head $ texture2DSizes t) $ \attP -> do
+        n <- readIORef tn
+        glFramebufferRenderbuffer GL_DRAW_FRAMEBUFFER attP GL_RENDERBUFFER n
+
+getTexture2DArrayImage t@(Texture2DArray tn _ ls) l' z' =
+    let l = min ls l'
+        V3 x y z = texture2DArraySizes t !! l
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn z' l (V2 x y) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1))
+
+getTexture3DImage t@(Texture3D tn _ ls) l' z' =
+    let l = min ls l'
+        V3 x y z = texture3DSizes t !! l
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn z' l (V2 x y) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTextureLayer GL_DRAW_FRAMEBUFFER attP n (fromIntegral l) (fromIntegral $ min z' (z-1))
+
+getTextureCubeImage t@(TextureCube tn _ ls) l' s =
+    let l = min ls l'
+        x = textureCubeSizes t !! l
+        s' = getGlCubeSide s
+    in do
+        registerRenderWriteTextureName tn
+        return $ Image tn (fromIntegral s') l (V2 x x) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTexture2D GL_DRAW_FRAMEBUFFER attP s' n (fromIntegral l)
+
+-- Experimental. Meant to be used with a geometry shader and emitVertex(PositionAnd)Layer.
+getLayeredTextureImage t@(Texture3D tn _ ls) l' =
+    let l = min ls l'
+        V3 x y _ = texture3DSizes t !! l
+    in  do
+        registerRenderWriteTextureName tn
+        return $ Image tn 0 l (V2 x y) $ \attP -> do
+            n <- readIORef tn
+            glFramebufferTexture GL_DRAW_FRAMEBUFFER attP n (fromIntegral l)
 
 getGlCubeSide :: CubeSide -> GLenum
 getGlCubeSide CubePosX = GL_TEXTURE_CUBE_MAP_POSITIVE_X

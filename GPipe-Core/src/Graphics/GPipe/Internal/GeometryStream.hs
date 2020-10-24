@@ -271,8 +271,15 @@ generativeLineStrip = S $ return notMeantToBeRead
 generativeTriangleStrip :: FragmentInput a => GGenerativeGeometry Triangles a
 generativeTriangleStrip = S $ return notMeantToBeRead
 
-emitVertex :: GeometryExplosive a => (VPos, a) -> GGenerativeGeometry p (VPos, a) -> GGenerativeGeometry p (VPos, a)
-emitVertex (V4 x y z w, a) g = S $ do
+emitVertex :: GeometryExplosive a => a -> GGenerativeGeometry p a -> GGenerativeGeometry p a
+emitVertex a g = S $ do
+    g' <- unS g
+    exploseGeometry a 0
+    T.lift $ T.lift $ tell "EmitVertex();\n"
+    return notMeantToBeRead
+
+emitVertexPosition :: GeometryExplosive a => (VPos, a) -> GGenerativeGeometry p (VPos, a) -> GGenerativeGeometry p (VPos, a)
+emitVertexPosition (V4 x y z w, a) g = S $ do
     g' <- unS g
     x' <- unS x
     y' <- unS y
@@ -283,10 +290,25 @@ emitVertex (V4 x y z w, a) g = S $ do
     T.lift $ T.lift $ tell "EmitVertex();\n"
     return notMeantToBeRead
 
-emitVertex' :: GeometryExplosive a => a -> GGenerativeGeometry p a -> GGenerativeGeometry p a
-emitVertex' a g = S $ do
+emitVertexLayer :: GeometryExplosive a => (VInt, a) -> GGenerativeGeometry p (VInt, a) -> GGenerativeGeometry p (VInt, a)
+emitVertexLayer (i, a) g = S $ do
     g' <- unS g
+    i' <- unS i
+    tellAssignment' "gl_Layer" $ i'
+    T.lift $ T.lift $ tell "EmitVertex();\n"
+    return notMeantToBeRead
+
+emitVertexPositionAndLayer :: GeometryExplosive a => ((VPos, VInt), a) -> GGenerativeGeometry p ((VPos, VInt), a) -> GGenerativeGeometry p ((VPos, VInt), a)
+emitVertexPositionAndLayer ((V4 x y z w, i), a) g = S $ do
+    g' <- unS g
+    x' <- unS x
+    y' <- unS y
+    z' <- unS z
+    w' <- unS w
+    tellAssignment' "gl_Position" $ "vec4("++x'++',':y'++',':z'++',':w'++")"
     exploseGeometry a 0
+    i' <- unS i
+    tellAssignment' "gl_Layer" $ i'
     T.lift $ T.lift $ tell "EmitVertex();\n"
     return notMeantToBeRead
 
@@ -322,6 +344,11 @@ defaultEnumerateVaryings x = do
     n <- get
     put (n + 1)
     return ["vgf" ++ show n]
+
+instance GeometryExplosive () where
+    exploseGeometry _ n = return n
+    declareGeometry _ = return (return ())
+    enumerateVaryings _ = return []
 
 instance GeometryExplosive VFloat where
     exploseGeometry = defaultExploseGeometry id
@@ -452,25 +479,26 @@ instance (GeometryExplosive a, GeometryExplosive b, GeometryExplosive c, Geometr
 newtype ToFragmentFromGeometry a b = ToFragmentFromGeometry (Kleisli (State Int) a b) deriving (Category, Arrow)
 
 class FragmentInputFromGeometry p a where
-    toFragmentFromGeometry :: ToFragmentFromGeometry (GGenerativeGeometry p (VPos, a)) (FragmentFormat a)
+    toFragmentFromGeometry :: ToFragmentFromGeometry (GGenerativeGeometry p (b, a)) (FragmentFormat a)
 
 instance FragmentCreator a => FragmentInputFromGeometry Triangles a where
     toFragmentFromGeometry = ToFragmentFromGeometry $ Kleisli $ \x -> do
         let ToAnotherFragment (Kleisli m) = toFragment2 :: ToAnotherFragment a (FragmentFormat a)
         m (evalState (createFragment :: State Int a) 0)
 
-generateAndRasterize :: forall p a s os f. (FragmentInputFromGeometry p a, PrimitiveTopology p)
+-- Note: from other constraint, b happens to be VPos or (VPos, VInt).
+generateAndRasterize :: forall p b a s os f. (FragmentInputFromGeometry p a, PrimitiveTopology p)
         => (s -> (Side, ViewPort, DepthRange))
         -> Int
-        -> GeometryStream (GGenerativeGeometry p (VPos, a))
+        -> GeometryStream (GGenerativeGeometry p (b, a))
         -> Shader os s (FragmentStream (FragmentFormat a))
 generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
         n <- getNewName
         modifyRenderIO (\s -> s { rasterizationNameToRenderIO = insert n io (rasterizationNameToRenderIO s) } )
         return (FragmentStream $ map (f n) xs)
     where
-        ToFragmentFromGeometry (Kleisli m) = toFragmentFromGeometry :: ToFragmentFromGeometry (GGenerativeGeometry p (VPos, a)) (FragmentFormat a)
-        f :: Int -> (GGenerativeGeometry p (VPos, a), GeometryStreamData) -> (FragmentFormat a, FragmentStreamData)
+        ToFragmentFromGeometry (Kleisli m) = toFragmentFromGeometry :: ToFragmentFromGeometry (GGenerativeGeometry p (b, a)) (FragmentFormat a)
+        f :: Int -> (GGenerativeGeometry p (b, a), GeometryStreamData) -> (FragmentFormat a, FragmentStreamData)
         f n (x, GeometryStreamData name layout psd) = (evalState (m x) 0, FragmentStreamData n True (makePrims layout x) psd true)
 
         makePrims a x = do
