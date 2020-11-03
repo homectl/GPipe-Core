@@ -5,6 +5,7 @@ module Main where
 import Test.Framework
 
 import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestCompiler
+import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestExpr
 import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestPrimitiveStream
 import {-@ HTF_TESTS @-} Graphics.GPipe.Internal.TestUniform
 

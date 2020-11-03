@@ -16,7 +16,7 @@
 
 module Graphics.GPipe.Expr (
     -- * Atomic shader type
-    S(),   
+    S(),
     V, F,
     VFloat, VInt, VWord, VBool,
     FFloat, FInt, FWord, FBool,
@@ -25,6 +25,7 @@ module Graphics.GPipe.Expr (
     -- * Type classes where the Prelude ones are lacking
     Convert(..),
     Integral'(..),
+    Bits'(..),
     Real'(..),
     FloatingOrd(..),
 
@@ -33,13 +34,13 @@ module Graphics.GPipe.Expr (
     dFdy,
     fwidth,
 
-    -- * Shader control structures    
+    -- * Shader control structures
     while,
     ifThen,
     ifThenElse,
-    ifThenElse',    
+    ifThenElse',
     ShaderBase(),
-    ShaderType(..)   
+    ShaderType(..)
 )
 where
 

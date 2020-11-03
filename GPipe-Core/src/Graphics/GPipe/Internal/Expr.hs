@@ -29,6 +29,7 @@ import Linear.Conjugate
 import Data.Foldable (Foldable(toList))
 import Data.Int
 import Data.Word
+import Data.Bits -- (FiniteBits(finiteBitSize))
 
 type NextTempVar = Int
 type NextGlobal = Int
@@ -748,6 +749,32 @@ instance Integral' a => Integral' (V3 a) where
 instance Integral' a => Integral' (V4 a) where
     div' = liftA2 div'
     mod' = liftA2 mod'
+
+class Bits' a where
+    and' :: a -> a -> a
+    or' :: a -> a -> a
+    xor' :: a -> a -> a
+    complement' :: a -> a
+    shiftL' :: a -> a -> a
+    shiftR' :: a -> a -> a
+    bitSize' :: a -> Int
+
+instance Bits' (S a Int) where
+    and' = bini "&"
+    or' = bini "|"
+    xor' = bini "^"
+    complement' = fun1i "~"
+    shiftL' = bini "<<"
+    shiftR' = bini ">>"
+    bitSize' = pure (finiteBitSize (undefined :: Int))
+instance Bits' (S a Word) where
+    and' = binu "&"
+    or' = binu "|"
+    xor' = binu "^"
+    complement' = fun1u "~"
+    shiftL' = binu "<<"
+    shiftR' = binu ">>"
+    bitSize' = pure (finiteBitSize (undefined :: Word))
 
 instance Floating (S a Float) where
   pi    = S $ return $ show (pi :: Float)

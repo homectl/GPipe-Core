@@ -292,9 +292,9 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
                     Just errP -> do
                         glDeleteProgram pName
                         return $ Left $ "Linking a GPU progam failed:\n" ++ errP ++ concat
-                            [ maybe "" (\e -> "\nVertex source:\n" ++ e ++ "\nSource:\n" ++ e) (Just vsource)
-                            , maybe "" (\e -> "\nGeometry source:\n" ++ e ++ "\nSource:\n" ++ e) ogsource
-                            , maybe "" (\e -> "\nFragment source:\n" ++ e ++ "\nSource:\n" ++ e) ofsource
+                            [ maybe "" (\e -> "\nVertex source:\n" ++ e ++ "\n") (Just vsource)
+                            , maybe "" (\e -> "\nGeometry source:\n" ++ e ++ "\n") ogsource
+                            , maybe "" (\e -> "\nFragment source:\n" ++ e ++ "\n") ofsource
                             ]
                     Nothing -> return $ Right pName
             else do
@@ -535,7 +535,9 @@ compileOpenGlShader name source = do
                                 with ptr $ \ pptr ->
                                     with (fromIntegral len) $ \ plen ->
                                         glShaderSource name 1 pptr plen
+    putStrLn $ "Compiling shader " ++ show name
     glCompileShader name
+    putStrLn $ "Compiled shader " ++ show name
     compStatus <- alloca $ \ ptr -> glGetShaderiv name GL_COMPILE_STATUS ptr >> peek ptr
     if compStatus /= GL_FALSE
         then return Nothing
@@ -549,7 +551,9 @@ compileOpenGlShader name source = do
 -- private
 linkProgram :: GLuint -> IO (Maybe String)
 linkProgram name = do
+    putStrLn $ "Linking program " ++ show name
     glLinkProgram name
+    putStrLn $ "Linked program " ++ show name
     linkStatus <- alloca $ \ ptr -> glGetProgramiv name GL_LINK_STATUS ptr >> peek ptr
     if linkStatus /= GL_FALSE
         then return Nothing
