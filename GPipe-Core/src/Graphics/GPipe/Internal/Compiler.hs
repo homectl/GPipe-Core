@@ -28,6 +28,8 @@ import Data.IORef
 import Data.List (zip5)
 import Data.Word
 
+import Graphics.GPipe.Internal.Debug
+
 -- public
 type WinId = Int
 
@@ -45,7 +47,7 @@ data Drawcall s = Drawcall
                 )
         ,   IO ()
         )
-    ,   feedbackBuffer :: Maybe GLuint
+    ,   feedbackBuffer :: Maybe (s -> IO (GLuint, GLuint))
         -- Key for RenderIOState::inputArrayToRenderIOs.
     ,   primitiveName :: Int
         -- Key for RenderIOState::rasterizationNameToRenderIO.
@@ -66,7 +68,11 @@ data Drawcall s = Drawcall
 
 -- public
 mapDrawcall :: (s -> s') -> Drawcall s' -> Drawcall s
-mapDrawcall f dc = dc{ drawcallFbo = drawcallFbo dc . f }
+mapDrawcall f dc = dc{ drawcallFbo = drawcallFbo dc . f, feedbackBuffer = feedbackBuffer' }
+    where
+        feedbackBuffer' = case feedbackBuffer dc of
+            Nothing -> Nothing
+            Just b -> Just (b . f)
 
 -- index/binding refers to what is used in the final shader. Index space is
 -- limited, usually 16 attribname is what was declared, but all might not be
@@ -315,7 +321,7 @@ innerCompile state (drawcall, unis, samps, ubinds, sbinds) = do
         -- Right: the program wrapped in a Render monad.
         Right pName -> Right <$> case (feedbackBuffer drawcall, rasterizationName drawcall) of
             (Nothing, Just rastN) -> createRenderer state (drawcall, unis, ubinds, samps, sbinds) pName rastN
-            (Just fbb, Just geoN) -> createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName fbb geoN
+            (Just getTransformFeedbackName, Just geoN) -> createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTransformFeedbackName geoN
             _ -> error "No rasterization nor feedback!"
 
 -- private
@@ -451,12 +457,12 @@ createFeedbackRenderer :: RenderIOState s -- Interactions between the drawcall a
         , [Int] -- its allocated texture units.
         )
     ->  GLuint -- program name
-    ->  GLuint -- buffer name
+    ->  (s -> IO (GLuint, GLuint)) -- transform feedback name
     ->  Int
     ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
             )
-createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName geoN = do
+createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTransformFeedbackName geoN = do
     let fboSetup = drawcallFbo drawcall
         primN = primitiveName drawcall
         inputs = usedInputs drawcall
@@ -483,6 +489,7 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
             rs <- lift $ lift get
             renv <- lift ask
             let (Left windowId, blendIO) = fboSetup x
+                transformFeedback = getTransformFeedbackName x
 
             case Map.lookup windowId (perWindowRenderState rs) of
                 Nothing -> return () -- Window deleted
@@ -512,14 +519,17 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName bName
                                 setVAO cd key vao
                                 glBindVertexArray vao'
                                 vaoIO
-                        -- We don’t really need GL_TRANSFORM_FEEDBACK(_BUFFER) for now.
-                        glBindBuffer GL_ARRAY_BUFFER bName
+                        (bName, tfName) <- transformFeedback
+                        glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
+                        -- This tells where to send the feedback data. When you use the feedback data as a VBO you don’t need anymore the TRANSFORM_FEEDBACK_BUFFER binding.
                         glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
                         glBeginTransformFeedback GL_TRIANGLES
                         glEnable GL_RASTERIZER_DISCARD
                         drawIO
                         glDisable GL_RASTERIZER_DISCARD
                         glEndTransformFeedback
+                        glBindTransformFeedback GL_TRANSFORM_FEEDBACK 0
+                        return ()
 
     let deleter = do
             glDeleteProgram pName

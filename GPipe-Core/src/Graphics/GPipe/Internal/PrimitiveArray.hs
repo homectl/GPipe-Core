@@ -94,7 +94,7 @@ dropIndices n i = i{ indexArrayLength = l - n', offset = offset i + n' }
         n' = min (max n 0) l
 
 data Points = PointList
-data Lines = LineLoop | LineStrip
+data Lines = LineLoop | LineStrip | LineList
 data LinesWithAdjacency = LineListAdjacency | LineStripAdjacency
 data Triangles = TriangleList | TriangleStrip
 data TrianglesWithAdjacency = TriangleListAdjacency | TriangleStripAdjacency
@@ -112,6 +112,7 @@ instance PrimitiveTopology Points where
     data Geometry Points a = Point a
 
 instance PrimitiveTopology Lines where
+    toGLtopology LineList = GL_LINES
     toGLtopology LineLoop = GL_LINE_LOOP
     toGLtopology LineStrip = GL_LINE_STRIP
     toLayoutIn _ = "lines"

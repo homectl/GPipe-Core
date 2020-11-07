@@ -3,6 +3,7 @@
 
 module Graphics.GPipe.Internal.PrimitiveStream where
 
+import Control.Arrow
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans.Reader
@@ -41,6 +42,8 @@ import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 import Data.Maybe (fromMaybe)
+
+import Graphics.GPipe.Internal.Debug
 
 -- Originally named DrawCallName and later in the code as PrimN. I've sticked
 -- with the latter, because it's more logical.
@@ -126,12 +129,13 @@ instance Arrow ToVertex where
     {-# INLINE first #-}
     first (ToVertex a b c) = ToVertex (first a) (first b) (first c)
 
-toPrimitiveStream :: forall os f s a p. (PrimitiveTopology p, VertexInput a) => (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
-toPrimitiveStream = toPrimitiveStream' False
-
 -- | Create a primitive stream from a primitive array provided from the shader environment.
-toPrimitiveStream' :: forall os f s a p. (PrimitiveTopology p, VertexInput a) => Bool -> (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
-toPrimitiveStream' contentFromTransformFeedback sf = Shader $ do
+-- TODO No way to constraint 'b' a bit more?
+toPrimitiveStream :: forall os f s a p. (PrimitiveTopology p, VertexInput a) => (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
+toPrimitiveStream = toPrimitiveStream' Nothing
+
+toPrimitiveStream' :: forall os f s a b p. (PrimitiveTopology p, VertexInput a) => Maybe (s -> Buffer os b) -> (s -> PrimitiveArray p a) -> Shader os s (PrimitiveStream p (VertexFormat a))
+toPrimitiveStream' getFeedbackBuffer sf = Shader $ do
 
     -- Get a unique (OpenGL) name for this shader by updating the 'ShaderState' (a pair of the next name and a 'RenderIOState s') from the ReaderT/WriterT/ListM/State.
     n <- getNewName
@@ -148,7 +152,12 @@ toPrimitiveStream' contentFromTransformFeedback sf = Shader $ do
             (useUniform (buildUDecl offToStype) 0) -- 0 is special blockname for the one used by primitive stream
 
     -- Register the actual OpenGL bind and draw commands for this shader name.
-    doForInputArray n (map (drawcall contentFromTransformFeedback) . getPrimitiveArray . sf)
+    doForInputArray n $ \s ->
+        let
+            fb = getFeedbackBuffer >>= \g -> return (g s)
+            ps = getPrimitiveArray (sf s)
+        in
+            map drawcall (map (\p -> (fb, p)) ps)
 
     return $ PrimitiveStream [(x, (Nothing, PrimitiveStreamData n uSize))]
 
@@ -159,19 +168,21 @@ toPrimitiveStream' contentFromTransformFeedback sf = Shader $ do
             (Kleisli makeBind) -- To construct the VAO.
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
-        drawcall True (PrimitiveArraySimple p _ s a) binds = (attribs a binds,
-            glDrawTransformFeedback (toGLtopology p) (fromIntegral s))
-        drawcall True (PrimitiveArrayInstanced p il _ s a) binds = (attribs a binds,
-            glDrawTransformFeedbackInstanced (toGLtopology p) (fromIntegral s) (fromIntegral il))
+        drawcall (Just feedbackBuffer, PrimitiveArraySimple p l s a) binds = (attribs a binds, do
+            Just tfName <- readIORef (bufTransformFeedback feedbackBuffer)
+            glDrawTransformFeedback (toGLtopology p) tfName)
+        drawcall (Just feedbackBuffer, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, do
+            Just tfName <- readIORef (bufTransformFeedback feedbackBuffer)
+            glDrawTransformFeedbackInstanced (toGLtopology p) tfName (fromIntegral il))
 
-        drawcall False (PrimitiveArraySimple p l s a) binds = (attribs a binds,
+        drawcall (Nothing, PrimitiveArraySimple p l s a) binds = (attribs a binds,
             glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
-        drawcall False (PrimitiveArrayIndexed p i s a) binds = (attribs a binds, do
+        drawcall (Nothing, PrimitiveArrayIndexed p i s a) binds = (attribs a binds, do
             bindIndexBuffer i
             glDrawElementsBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral s))
-        drawcall False (PrimitiveArrayInstanced p il l s a) binds = (attribs a binds,
+        drawcall (Nothing, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds,
             glDrawArraysInstanced (toGLtopology p) (fromIntegral s) (fromIntegral l) (fromIntegral il))
-        drawcall False (PrimitiveArrayIndexedInstanced p i il s a) binds = (attribs a binds, do
+        drawcall (Nothing, PrimitiveArrayIndexedInstanced p i il s a) binds = (attribs a binds, do
             bindIndexBuffer i
             glDrawElementsInstancedBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il) (fromIntegral s))
 

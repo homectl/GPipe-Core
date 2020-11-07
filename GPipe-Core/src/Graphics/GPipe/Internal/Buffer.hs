@@ -16,7 +16,7 @@ module Graphics.GPipe.Internal.Buffer
     writeBuffer,
     copyBuffer,
     BufferStartPos,
-    bufSize, bufName, bufElementSize, bufferLength, bufBElement, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
+    bufSize, bufName, bufElementSize, bufferLength, bufBElement, bufTransformFeedback, bufferWriteInternal, makeBuffer, getUniformAlignment, UniformAlignment
 ) where
 
 import Graphics.GPipe.Internal.Context
@@ -71,10 +71,10 @@ data Buffer os b = Buffer
     {   bufName :: BufferName
     ,   bufElementSize :: Int
         -- | Retrieve the number of elements in a buffer.
-        -- Length of unsynchronized buffer is unknown (transform feedback usecase).
     ,   bufferLength :: Int
     ,   bufBElement :: BInput -> b
     ,   bufWriter :: Ptr () -> HostFormat b -> IO ()
+    ,   bufTransformFeedback :: IORef (Maybe GLuint)
     }
 
 instance Eq (Buffer os b) where
@@ -342,8 +342,9 @@ newBuffer elementCount
             glGenBuffers 1 ptr
             peek ptr
         nameRef <- newIORef name
+        tfRef <- newIORef Nothing
         uniAl <- getUniformAlignment
-        let buffer = makeBuffer nameRef elementCount uniAl
+        let buffer = makeBuffer' nameRef elementCount uniAl tfRef
         bname <- readIORef $ bufName buffer
         glBindBuffer GL_COPY_WRITE_BUFFER bname
         glBufferData GL_COPY_WRITE_BUFFER (fromIntegral $ bufSize buffer) nullPtr GL_STREAM_DRAW
@@ -425,13 +426,16 @@ getUniformAlignment :: IO Int
 getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT ptr >> peek ptr)
 
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
-makeBuffer name elementCount uniformAlignment  = do
+makeBuffer name elementCount uniformAlignment = makeBuffer' name elementCount uniformAlignment (error "Not meant to be used for transform feedback")
+
+makeBuffer' :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> IORef (Maybe GLuint) -> Buffer os b
+makeBuffer' name elementCount uniformAlignment tfRef = do
     let ToBuffer skipIt readIt writeIt alignMode = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b
         ((_,elementSize),pads) = runReader (runWriterT (runStateT (runKleisli skipIt err) 0)) (uniformAlignment, alignMode)
         elementF bIn = fst $ runReader (runStateT (runKleisli readIt err) 0) (name, elementSize, bIn)
         writer ptr x = void $ runStateT (runKleisli writeIt x) (ptr,pads)
-    Buffer name elementSize elementCount elementF writer
+    Buffer name elementSize elementCount elementF writer tfRef
 
 -- | This type family restricts what host and buffer types a texture format may be converted into.
 -- 'BufferColor t h' for a texture representation 't' and a host representation 'h' will evaluate to a buffer type used in the transfer.

@@ -93,3 +93,6 @@ executables:
         dependencies:
         - linear
         - JuicyPixels
+
+ghc-options:
+- -j4
