@@ -521,8 +521,6 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTr
                                 vaoIO
                         (bName, tfName) <- transformFeedback
                         glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
-                        -- This tells where to send the feedback data. When you use the feedback data as a VBO you don’t need anymore the TRANSFORM_FEEDBACK_BUFFER binding.
-                        glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
                         glBeginTransformFeedback GL_TRIANGLES
                         glEnable GL_RASTERIZER_DISCARD
                         drawIO

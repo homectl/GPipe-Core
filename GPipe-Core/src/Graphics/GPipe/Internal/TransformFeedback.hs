@@ -87,11 +87,11 @@ makeDrawcall w getTransformFeedbackBuffer (GeometryStreamData geoN _ (PrimitiveS
                     writeIORef tfRef (Just name)
                     --liftNonWinContextIO $ (addContextFinalizer tfRef $ with name (glDeleteTransformFeedbacks 1))
                     return name
-            {-
-            glBindTransformFeedback GL_TRANSFORM_FEEDBACK_BUFFER tfName
+
+            glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
             glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
-            glBindTransformFeedback GL_TRANSFORM_FEEDBACK_BUFFER 0
-            -}
+            glBindTransformFeedback GL_TRANSFORM_FEEDBACK 0
+
             return (bName, tfName)
     return $ Drawcall
         (const (Left (getWinName w), return ()))
