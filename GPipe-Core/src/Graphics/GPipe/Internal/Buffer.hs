@@ -74,7 +74,7 @@ data Buffer os b = Buffer
     ,   bufferLength :: Int
     ,   bufBElement :: BInput -> b
     ,   bufWriter :: Ptr () -> HostFormat b -> IO ()
-    ,   bufTransformFeedback :: IORef (Maybe GLuint)
+    ,   bufTransformFeedback :: IORef (Maybe (GLuint, GLuint))
     }
 
 instance Eq (Buffer os b) where
@@ -428,7 +428,7 @@ getUniformAlignment = fromIntegral <$> alloca (\ ptr -> glGetIntegerv GL_UNIFORM
 makeBuffer :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> Buffer os b
 makeBuffer name elementCount uniformAlignment = makeBuffer' name elementCount uniformAlignment (error "Not meant to be used for transform feedback")
 
-makeBuffer' :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> IORef (Maybe GLuint) -> Buffer os b
+makeBuffer' :: forall os b. BufferFormat b => BufferName -> Int -> UniformAlignment -> IORef (Maybe (GLuint, GLuint)) -> Buffer os b
 makeBuffer' name elementCount uniformAlignment tfRef = do
     let ToBuffer skipIt readIt writeIt alignMode = toBuffer :: ToBuffer (HostFormat b) b
         err = error "toBuffer is creating values that are dependant on the actual HostFormat values, this is not allowed since it doesn't allow static creation of shaders" :: HostFormat b

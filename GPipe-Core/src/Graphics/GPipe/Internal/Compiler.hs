@@ -27,7 +27,6 @@ import Control.Exception (throwIO)
 import Data.IORef
 import Data.List (zip5)
 import Data.Word
-
 import Graphics.GPipe.Internal.Debug
 
 -- public
@@ -47,7 +46,7 @@ data Drawcall s = Drawcall
                 )
         ,   IO ()
         )
-    ,   feedbackBuffer :: Maybe (s -> IO (GLuint, GLuint))
+    ,   feedbackBuffer :: Maybe (s -> IO (GLuint, GLuint, GLuint))
         -- Key for RenderIOState::inputArrayToRenderIOs.
     ,   primitiveName :: Int
         -- Key for RenderIOState::rasterizationNameToRenderIO.
@@ -457,7 +456,7 @@ createFeedbackRenderer :: RenderIOState s -- Interactions between the drawcall a
         , [Int] -- its allocated texture units.
         )
     ->  GLuint -- program name
-    ->  (s -> IO (GLuint, GLuint)) -- transform feedback name
+    ->  (s -> IO (GLuint, GLuint, GLuint)) -- transform feedback name
     ->  Int
     ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
@@ -519,15 +518,16 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTr
                                 setVAO cd key vao
                                 glBindVertexArray vao'
                                 vaoIO
-                        (bName, tfName) <- transformFeedback
+                        (bName, tfName, tfqName) <- transformFeedback
                         glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
+                        glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
+                        glBeginQuery GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN tfqName
                         glBeginTransformFeedback GL_TRIANGLES
                         glEnable GL_RASTERIZER_DISCARD
                         drawIO
                         glDisable GL_RASTERIZER_DISCARD
                         glEndTransformFeedback
-                        glBindTransformFeedback GL_TRANSFORM_FEEDBACK 0
-                        return ()
+                        glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
 
     let deleter = do
             glDeleteProgram pName

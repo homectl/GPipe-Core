@@ -18,13 +18,14 @@ import Graphics.GPipe.Internal.Context
 import Graphics.GPipe.Internal.Uniform
 import Control.Category
 import Control.Arrow
-import Control.Monad (void)
+import Control.Monad (void, when)
 #if __GLASGOW_HASKELL__ < 804
 import Data.Semigroup (Semigroup(..))
 #endif
 import Data.IntMap.Lazy (insert)
 import Data.Word
 import Data.Int
+import Foreign.Marshal (alloca)
 import Foreign.Storable
 import Foreign.Ptr
 import qualified Data.IntMap as Map
@@ -169,10 +170,22 @@ toPrimitiveStream' getFeedbackBuffer sf = Shader $ do
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
         drawcall (Just feedbackBuffer, PrimitiveArraySimple p l s a) binds = (attribs a binds, do
-            Just tfName <- readIORef (bufTransformFeedback feedbackBuffer)
-            glDrawTransformFeedback (toGLtopology p) tfName)
+            Just (tfName, tfqName) <- readIORef (bufTransformFeedback feedbackBuffer)
+            if False
+                -- The bigger the amount of vertice, the faster a "*ERROR* Waiting for fences timed out!" will happen…
+                -- For small amounts, works fine.
+                then glDrawTransformFeedback (toGLtopology p) tfName
+                else do
+                    -- Is it costly too do it repeatedly?
+                    l' <- alloca $ \ptr -> do
+                        glGetQueryObjectiv tfqName GL_QUERY_RESULT ptr
+                        peek ptr
+                    when (l' > 0) $ do
+                        when (l' * 4 > fromIntegral l) (error $ "Too much content generate by transform feedback: " ++ show (l' * 4) ++ " > " ++ show l)
+                        glDrawArrays (toGLtopology p) (fromIntegral s) (l' * 4) -- Why I’m required to x4?
+            )
         drawcall (Just feedbackBuffer, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, do
-            Just tfName <- readIORef (bufTransformFeedback feedbackBuffer)
+            Just (tfName, _) <- readIORef (bufTransformFeedback feedbackBuffer)
             glDrawTransformFeedbackInstanced (toGLtopology p) tfName (fromIntegral il))
 
         drawcall (Nothing, PrimitiveArraySimple p l s a) binds = (attribs a binds,

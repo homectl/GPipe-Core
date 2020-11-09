@@ -78,21 +78,19 @@ makeDrawcall w getTransformFeedbackBuffer (GeometryStreamData geoN _ (PrimitiveS
             bName <- readIORef (bufName buffer)
             let tfRef = bufTransformFeedback buffer
             tf <- readIORef tfRef
-            tfName <- case tf of
-                Just name -> return name
+            (tfName, tfqName) <- case tf of
+                Just names -> return names
                 Nothing -> do
-                    name <- alloca $ \ptr -> do
+                    tfName <- alloca $ \ptr -> do
                         glGenTransformFeedbacks 1 ptr
                         peek ptr
-                    writeIORef tfRef (Just name)
+                    tfqName <- alloca $ \ptr -> do
+                        glGenQueries 1 ptr
+                        peek ptr
+                    writeIORef tfRef (Just (tfName, tfqName))
                     --liftNonWinContextIO $ (addContextFinalizer tfRef $ with name (glDeleteTransformFeedbacks 1))
-                    return name
-
-            glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
-            glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
-            glBindTransformFeedback GL_TRANSFORM_FEEDBACK 0
-
-            return (bName, tfName)
+                    return (tfName, tfqName)
+            return (bName, tfName, tfqName)
     return $ Drawcall
         (const (Left (getWinName w), return ()))
         (Just getTransformFeedbackBufferName)
