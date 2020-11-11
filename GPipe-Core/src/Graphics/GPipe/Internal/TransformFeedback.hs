@@ -22,7 +22,7 @@ import Foreign.Marshal
 import Foreign.Storable
 import Control.Monad.Trans.State
 
-drawNothing :: forall p a s c ds os f. (PrimitiveTopology p, VertexInput a, FragmentInputFromGeometry p (VertexFormat a), GeometryExplosive (VertexFormat a))
+drawNothing :: forall p a s c ds os f. (PrimitiveTopology p, VertexInput a, GeometryExplosive (VertexFormat a))
     => Window os c ds
     -- Output feedback buffers should remain black boxes until synchronized
     -- which won't be necessary when using glDrawTransformFeedback (add a flag
@@ -37,7 +37,7 @@ drawNothing :: forall p a s c ds os f. (PrimitiveTopology p, VertexInput a, Frag
     -> Shader os s ()
 drawNothing w getTransformFeedbackBuffer maxVertices gs = Shader $ tellDrawcalls w gs getTransformFeedbackBuffer maxVertices
 
-tellDrawcalls :: forall p a s c ds os. (PrimitiveTopology p, VertexInput a, FragmentInputFromGeometry p (VertexFormat a), GeometryExplosive (VertexFormat a))
+tellDrawcalls :: forall p a s c ds os. (PrimitiveTopology p, VertexInput a, GeometryExplosive (VertexFormat a))
     => Window os c ds
     -> GeometryStream (GGenerativeGeometry p (VertexFormat a))
     -> (s -> Buffer os a)
@@ -55,24 +55,27 @@ tellDrawcalls w (GeometryStream xs) getTransformFeedbackBuffer maxVertices =  ma
                 withArray names $ \a -> do
                     glTransformFeedbackVaryings pName (fromIntegral varyingCount) a bufferMode
                 mapM_ free names
+            topology = toGeometryShaderOutputTopology (undefined :: p)
 
-        tellDrawcall $ makeDrawcall w getTransformFeedbackBuffer gsd shaderDeclarations $ do
+        tellDrawcall $ makeDrawcall w getTransformFeedbackBuffer topology gsd shaderDeclarations $ do
             declareGeometryLayout layoutName (toLayoutOut (undefined :: p)) maxVertices
             x' <- unS x
             return ()
 
         modifyRenderIO (\s -> s { transformFeedbackToRenderIO = insert n io (transformFeedbackToRenderIO s) } )
 
-makeDrawcall :: forall a s c ds os. (VertexInput a) -- , GeometryExplosive a
+makeDrawcall :: forall a s c ds os. (VertexInput a)
     => Window os c ds
     -> (s -> Buffer os a)
+    -> GLuint
     -> GeometryStreamData
     -> GlobDeclM ()
     -> ExprM ()
     -> IO (Drawcall s)
-makeDrawcall w getTransformFeedbackBuffer (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shaderDeclarations shader = do
+makeDrawcall w getTransformFeedbackBuffer topology (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shaderDeclarations shader = do
     (gsource, gunis, gsamps, _, prevShaderDeclarations, prevShader) <- runExprM shaderDeclarations shader
     (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevShaderDeclarations prevShader
+
     let getTransformFeedbackBufferName = \s -> do
             let buffer = getTransformFeedbackBuffer s
             bName <- readIORef (bufName buffer)
@@ -90,7 +93,8 @@ makeDrawcall w getTransformFeedbackBuffer (GeometryStreamData geoN _ (PrimitiveS
                     writeIORef tfRef (Just (tfName, tfqName))
                     --liftNonWinContextIO $ (addContextFinalizer tfRef $ with name (glDeleteTransformFeedbacks 1))
                     return (tfName, tfqName)
-            return (bName, tfName, tfqName)
+            return (bName, tfName, tfqName, topology)
+
     return $ Drawcall
         (const (Left (getWinName w), return ()))
         (Just getTransformFeedbackBufferName)

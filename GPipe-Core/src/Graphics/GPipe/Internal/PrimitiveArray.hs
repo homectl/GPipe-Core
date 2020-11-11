@@ -101,12 +101,16 @@ data TrianglesWithAdjacency = TriangleListAdjacency | TriangleStripAdjacency
 
 class PrimitiveTopology p where
     toGLtopology :: p -> GLuint
+    toPrimitiveSize :: p -> Int
+    toGeometryShaderOutputTopology :: p -> GLuint
     toLayoutIn :: p -> String
     toLayoutOut :: p -> String
     data Geometry p a
 
 instance PrimitiveTopology Points where
     toGLtopology PointList = GL_POINTS
+    toPrimitiveSize _= 1
+    toGeometryShaderOutputTopology _ = GL_POINTS
     toLayoutIn _ = "points"
     toLayoutOut _ = "points"
     data Geometry Points a = Point a
@@ -115,6 +119,8 @@ instance PrimitiveTopology Lines where
     toGLtopology LineList = GL_LINES
     toGLtopology LineLoop = GL_LINE_LOOP
     toGLtopology LineStrip = GL_LINE_STRIP
+    toPrimitiveSize _= 2
+    toGeometryShaderOutputTopology _ = GL_LINES
     toLayoutIn _ = "lines"
     toLayoutOut _ = "line_strip"
     data Geometry Lines a = Line a a
@@ -122,6 +128,8 @@ instance PrimitiveTopology Lines where
 instance PrimitiveTopology LinesWithAdjacency where
     toGLtopology LineListAdjacency = GL_LINES_ADJACENCY
     toGLtopology LineStripAdjacency = GL_LINE_STRIP_ADJACENCY
+    toPrimitiveSize _= 2
+    toGeometryShaderOutputTopology _ = GL_LINES
     toLayoutIn _ = "lines_adjacency"
     toLayoutOut _ = "line_strip"
     data Geometry LinesWithAdjacency a = LineWithAdjacency a a a a
@@ -129,6 +137,8 @@ instance PrimitiveTopology LinesWithAdjacency where
 instance PrimitiveTopology Triangles where
     toGLtopology TriangleList = GL_TRIANGLES
     toGLtopology TriangleStrip = GL_TRIANGLE_STRIP
+    toPrimitiveSize _= 3
+    toGeometryShaderOutputTopology _ = GL_TRIANGLES
     toLayoutIn _ = "triangles"
     toLayoutOut _ = "triangle_strip"
     data Geometry Triangles a = Triangle a a a
@@ -136,6 +146,8 @@ instance PrimitiveTopology Triangles where
 instance PrimitiveTopology TrianglesWithAdjacency where
     toGLtopology TriangleListAdjacency = GL_TRIANGLES_ADJACENCY
     toGLtopology TriangleStripAdjacency = GL_TRIANGLE_STRIP_ADJACENCY
+    toPrimitiveSize _= 3
+    toGeometryShaderOutputTopology _ = GL_TRIANGLES
     toLayoutIn _ = "triangles_adjacency"
     toLayoutOut _ = "triangle_strip"
     data Geometry TrianglesWithAdjacency a = TriangleWithAdjacency a a a a a a

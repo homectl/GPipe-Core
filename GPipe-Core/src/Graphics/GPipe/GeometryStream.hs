@@ -7,7 +7,7 @@ module Graphics.GPipe.GeometryStream (
     generateAndRasterize,
 
     -- * Various GeometryStream operations
-    generativePoint,
+    generativePoints,
     generativeLineStrip,
     generativeTriangleStrip,
     emitVertex,

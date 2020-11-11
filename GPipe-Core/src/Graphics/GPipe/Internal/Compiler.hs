@@ -28,6 +28,8 @@ import Data.IORef
 import Data.List (zip5)
 import Data.Word
 import Graphics.GPipe.Internal.Debug
+import System.IO
+import Control.Monad.IO.Class
 
 -- public
 type WinId = Int
@@ -46,7 +48,7 @@ data Drawcall s = Drawcall
                 )
         ,   IO ()
         )
-    ,   feedbackBuffer :: Maybe (s -> IO (GLuint, GLuint, GLuint))
+    ,   feedbackBuffer :: Maybe (s -> IO (GLuint, GLuint, GLuint, GLuint))
         -- Key for RenderIOState::inputArrayToRenderIOs.
     ,   primitiveName :: Int
         -- Key for RenderIOState::rasterizationNameToRenderIO.
@@ -219,7 +221,6 @@ safeGenerateDrawcalls protoDrawcalls = do
             , ["Too many textures used in a single vertex shader\n" | any (\ xs -> length xs >= maxVSamplers) vSampsPerDrawcall]
             , ["Too many uniform blocks used in a single fragment shader\n" | any (\ xs -> length xs >= maxFUnis) fUnisPerDrawcall]
             , ["Too many textures used in a single fragment shader\n" | any (\ xs -> length xs >= maxFSamplers) fSampsPerDrawcall]
-
             , ["Too many uniform blocks used in a single shader program\n" | any (\ xs -> length xs >= maxUnis) unisPerDrawcall]
             , ["Too many textures used in a single shader program\n" | any (\ xs -> length xs >= maxSamplers) sampsPerDrawcall]
             ]
@@ -456,7 +457,7 @@ createFeedbackRenderer :: RenderIOState s -- Interactions between the drawcall a
         , [Int] -- its allocated texture units.
         )
     ->  GLuint -- program name
-    ->  (s -> IO (GLuint, GLuint, GLuint)) -- transform feedback name
+    ->  (s -> IO (GLuint, GLuint, GLuint, GLuint)) -- transform feedback stuff
     ->  Int
     ->  IO  ( (IORef GLuint, IO ()) -- The program name and its destructor.
             , s -> Render os () -- The program's renderer as a function on a render (OpenGL) state.
@@ -518,16 +519,23 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTr
                                 setVAO cd key vao
                                 glBindVertexArray vao'
                                 vaoIO
-                        (bName, tfName, tfqName) <- transformFeedback
+                        (bName, tfName, tfqName, topology) <- transformFeedback
                         glBindTransformFeedback GL_TRANSFORM_FEEDBACK tfName
                         glBindBufferBase GL_TRANSFORM_FEEDBACK_BUFFER 0 bName
                         glBeginQuery GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN tfqName
-                        glBeginTransformFeedback GL_TRIANGLES
+                        -- liftIO $ hPutStrLn stderr $ "doing transform feedback"
+                        glBeginTransformFeedback topology
                         glEnable GL_RASTERIZER_DISCARD
                         drawIO
                         glDisable GL_RASTERIZER_DISCARD
                         glEndTransformFeedback
                         glEndQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN);
+                        {-
+                        l <- alloca $ \ptr -> do
+                            glGetQueryObjectiv tfqName GL_QUERY_RESULT ptr
+                            peek ptr
+                        liftIO $ hPutStrLn stderr $ "generated primitive count: " ++ show l
+                        -}
 
     let deleter = do
             glDeleteProgram pName
@@ -538,14 +546,14 @@ createFeedbackRenderer state (drawcall, unis, ubinds, samps, sbinds) pName getTr
 -- private
 compileOpenGlShader :: GLuint -> String -> IO (Maybe String)
 compileOpenGlShader name source = do
-    writeFile ("shaders/" ++ show name ++ ".glsl") source -- For debug purposes only.
+    -- writeFile ("shaders/" ++ show name ++ ".glsl") source -- For debug purposes only.
     withCStringLen source $ \ (ptr, len) ->
                                 with ptr $ \ pptr ->
                                     with (fromIntegral len) $ \ plen ->
                                         glShaderSource name 1 pptr plen
-    putStrLn $ "Compiling shader " ++ show name
+    -- putStrLn $ "Compiling shader " ++ show name
     glCompileShader name
-    putStrLn $ "Compiled shader " ++ show name
+    -- putStrLn $ "Compiled shader " ++ show name
     compStatus <- alloca $ \ ptr -> glGetShaderiv name GL_COMPILE_STATUS ptr >> peek ptr
     if compStatus /= GL_FALSE
         then return Nothing
@@ -559,9 +567,9 @@ compileOpenGlShader name source = do
 -- private
 linkProgram :: GLuint -> IO (Maybe String)
 linkProgram name = do
-    putStrLn $ "Linking program " ++ show name
+    -- putStrLn $ "Linking program " ++ show name
     glLinkProgram name
-    putStrLn $ "Linked program " ++ show name
+    -- putStrLn $ "Linked program " ++ show name
     linkStatus <- alloca $ \ ptr -> glGetProgramiv name GL_LINK_STATUS ptr >> peek ptr
     if linkStatus /= GL_FALSE
         then return Nothing

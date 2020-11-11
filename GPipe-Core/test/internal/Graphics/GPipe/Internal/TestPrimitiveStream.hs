@@ -79,7 +79,7 @@ test_toVertex = do
     return ()
 
 -- Regular uniforms work produce mostly the same result but differently (see the
--- TestUniform modure).
+-- TestUniform module).
 test_toUniformVertex = do
     let
         ToVertex

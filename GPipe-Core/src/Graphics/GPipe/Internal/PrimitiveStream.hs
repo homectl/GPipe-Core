@@ -43,6 +43,8 @@ import Linear.Plucker (Plucker(..))
 import Linear.Quaternion (Quaternion(..))
 import Linear.Affine (Point(..))
 import Data.Maybe (fromMaybe)
+import System.IO
+import Control.Monad.IO.Class
 
 import Graphics.GPipe.Internal.Debug
 
@@ -170,6 +172,7 @@ toPrimitiveStream' getFeedbackBuffer sf = Shader $ do
             = toVertex :: ToVertex a (VertexFormat a) -- Select the ToVertex to translate 'a' into a 'VertexFormat a'.
 
         drawcall (Just feedbackBuffer, PrimitiveArraySimple p l s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 1"
             Just (tfName, tfqName) <- readIORef (bufTransformFeedback feedbackBuffer)
             if False
                 -- The bigger the amount of vertice, the faster a "*ERROR* Waiting for fences timed out!" will happen…
@@ -177,25 +180,30 @@ toPrimitiveStream' getFeedbackBuffer sf = Shader $ do
                 then glDrawTransformFeedback (toGLtopology p) tfName
                 else do
                     -- Is it costly too do it repeatedly?
-                    l' <- alloca $ \ptr -> do
+                    l' <- (fromIntegral (toPrimitiveSize p) *) <$> (alloca $ \ptr -> do
                         glGetQueryObjectiv tfqName GL_QUERY_RESULT ptr
-                        peek ptr
+                        peek ptr)
+                    -- liftIO $ hPutStrLn stderr $ "queried vertice count: " ++ show l'
                     when (l' > 0) $ do
-                        when (l' * 4 > fromIntegral l) (error $ "Too much content generate by transform feedback: " ++ show (l' * 4) ++ " > " ++ show l)
-                        glDrawArrays (toGLtopology p) (fromIntegral s) (l' * 4) -- Why I’m required to x4?
+                        glDrawArrays (toGLtopology p) (fromIntegral s) l'
             )
         drawcall (Just feedbackBuffer, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 2"
             Just (tfName, _) <- readIORef (bufTransformFeedback feedbackBuffer)
             glDrawTransformFeedbackInstanced (toGLtopology p) tfName (fromIntegral il))
 
-        drawcall (Nothing, PrimitiveArraySimple p l s a) binds = (attribs a binds,
+        drawcall (Nothing, PrimitiveArraySimple p l s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 3"
             glDrawArrays (toGLtopology p) (fromIntegral s) (fromIntegral l))
         drawcall (Nothing, PrimitiveArrayIndexed p i s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 4"
             bindIndexBuffer i
             glDrawElementsBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral s))
-        drawcall (Nothing, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds,
+        drawcall (Nothing, PrimitiveArrayInstanced p il l s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 5"
             glDrawArraysInstanced (toGLtopology p) (fromIntegral s) (fromIntegral l) (fromIntegral il))
         drawcall (Nothing, PrimitiveArrayIndexedInstanced p i il s a) binds = (attribs a binds, do
+            -- liftIO $ hPutStrLn stderr $ "drawcall 6"
             bindIndexBuffer i
             glDrawElementsInstancedBaseVertex (toGLtopology p) (fromIntegral $ indexArrayLength i) (indexType i) (intPtrToPtr $ fromIntegral $ offset i * glSizeOf (indexType i)) (fromIntegral il) (fromIntegral s))
 

@@ -262,8 +262,8 @@ geometrize (PrimitiveStream xs) = Shader $ do
 
 notMeantToBeRead = "false" -- error "a generative geometry is inherently a write-only value"
 
-generativePoint :: FragmentInput a => GGenerativeGeometry Points a
-generativePoint = S $ return notMeantToBeRead
+generativePoints :: FragmentInput a => GGenerativeGeometry Points a
+generativePoints = S $ return notMeantToBeRead
 
 generativeLineStrip :: FragmentInput a => GGenerativeGeometry Lines a
 generativeLineStrip = S $ return notMeantToBeRead
@@ -372,7 +372,7 @@ instance GeometryExplosive VInt where
 
 instance GeometryExplosive VWord where
     exploseGeometry = defaultExploseGeometry id
-    declareGeometry = defaultDeclareGeometry STypeFloat
+    declareGeometry = defaultDeclareGeometry STypeUInt
     enumerateVaryings = defaultEnumerateVaryings
 
 instance GeometryExplosive VBool where
