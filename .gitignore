@@ -1,7 +1,9 @@
-# Cabal?
-dist
-dist-*
-.ghc.environment.*
+/.dist-buildwrapper
 
-# VS Code
-GPipe-Core/.vscode/
+/dist
+/bld.log
+
+cabal.sandbox.config
+.stack-work/
+dist/
+

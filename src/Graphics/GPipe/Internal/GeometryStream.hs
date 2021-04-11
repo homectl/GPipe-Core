@@ -488,7 +488,7 @@ instance FragmentCreator a => FragmentInputFromGeometry Triangles a where
 
 -- Note: from other constraint, b happens to be VPos or (VPos, VInt).
 generateAndRasterize :: forall p b a s os f. (FragmentInputFromGeometry p a, PrimitiveTopology p)
-        => (s -> (Side, ViewPort, DepthRange))
+        => (s -> (Side, PolygonMode, ViewPort, DepthRange))
         -> Int
         -> GeometryStream (GGenerativeGeometry p (b, a))
         -> Shader os s (FragmentStream (FragmentFormat a))
@@ -507,10 +507,11 @@ generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
             return ()
 
         io s =
-            let (side, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s
+            let (side, polygonMode, ViewPort (V2 x y) (V2 w h), DepthRange dmin dmax) = sf s
             in  if w < 0 || h < 0
                     then error "ViewPort, negative size"
                     else do setGlCullFace side
+                            setGlPolygonMode polygonMode
                             glScissor (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glViewport (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h)
                             glDepthRange (realToFrac dmin) (realToFrac dmax)
@@ -519,6 +520,15 @@ generateAndRasterize sf maxVertices (GeometryStream xs) = Shader $ do
         setGlCullFace Front = glEnable GL_CULL_FACE >> glCullFace GL_BACK -- Back is culled when front is rasterized
         setGlCullFace Back = glEnable GL_CULL_FACE >> glCullFace GL_FRONT
         setGlCullFace _ = glDisable GL_CULL_FACE
+
+        setGlPolygonMode PolygonFill      = glPolygonMode GL_FRONT_AND_BACK GL_FILL
+        setGlPolygonMode PolygonPoint     = do
+            glEnable GL_PROGRAM_POINT_SIZE
+            glPolygonMode GL_FRONT_AND_BACK GL_POINT
+        setGlPolygonMode (PolygonLine lw) = do
+            glLineWidth (realToFrac lw)
+            glPolygonMode GL_FRONT_AND_BACK GL_LINE
+
         setGLPointSize = glDisable GL_PROGRAM_POINT_SIZE
 
 ------------------------------------------------------------------------------------------------------------------------------------

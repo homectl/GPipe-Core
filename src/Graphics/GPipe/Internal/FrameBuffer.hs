@@ -234,14 +234,14 @@ makeDrawcall ::
     IO (Drawcall s)
 makeDrawcall (sh, shd, wOrIo) (FragmentStreamData rastN False shaderpos (PrimitiveStreamData primN ubuff) keep) =
     do
-        (fsource, funis, fsamps, _, prevDecls, prevS) <- runExprM shd (discard keep >> sh)
-        (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevDecls (prevS >> shaderpos)
+        ExprResult fsource funis fsamps _ prevDecls prevS <- runExprM shd (discard keep >> sh)
+        ExprResult vsource vunis vsamps vinps _ _ <- runExprM prevDecls (prevS >> shaderpos)
         return $ Drawcall wOrIo Nothing primN (Just rastN) vsource Nothing (Just fsource) vinps vunis vsamps [] [] funis fsamps ubuff
 makeDrawcall (sh, shd, wOrIo) (FragmentStreamData rastN True shaderpos (PrimitiveStreamData primN ubuff) keep) =
     do
-        (fsource, funis, fsamps, _, prevDecls, prevS) <- runExprM shd (discard keep >> sh)
-        (gsource, gunis, gsamps, _, prevDecls2, prevS2) <- runExprM prevDecls (prevS >> shaderpos)
-        (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevDecls2 prevS2
+        ExprResult fsource funis fsamps _ prevDecls prevS <- runExprM shd (discard keep >> sh)
+        ExprResult gsource gunis gsamps _ prevDecls2 prevS2 <- runExprM prevDecls (prevS >> shaderpos)
+        ExprResult vsource vunis vsamps vinps _ _ <- runExprM prevDecls2 prevS2
         return $ Drawcall wOrIo Nothing primN (Just rastN) vsource (Just gsource) (Just fsource) vinps vunis vsamps gunis gsamps funis fsamps ubuff
 
 setColor :: forall c. ColorSampleable c => c -> Int -> FragColor c -> (ExprM (), GlobDeclM ())

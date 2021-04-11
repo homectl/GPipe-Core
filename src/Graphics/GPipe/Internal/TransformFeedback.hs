@@ -73,8 +73,8 @@ makeDrawcall :: forall a s c ds os. (VertexInput a)
     -> ExprM ()
     -> IO (Drawcall s)
 makeDrawcall w getTransformFeedbackBuffer topology (GeometryStreamData geoN _ (PrimitiveStreamData primN ubuff)) shaderDeclarations shader = do
-    (gsource, gunis, gsamps, _, prevShaderDeclarations, prevShader) <- runExprM shaderDeclarations shader
-    (vsource, vunis, vsamps, vinps, _, _) <- runExprM prevShaderDeclarations prevShader
+    ExprResult gsource gunis gsamps _ prevShaderDeclarations prevShader <- runExprM shaderDeclarations shader
+    ExprResult vsource vunis vsamps vinps _ _ <- runExprM prevShaderDeclarations prevShader
 
     let getTransformFeedbackBufferName = \s -> do
             let buffer = getTransformFeedbackBuffer s

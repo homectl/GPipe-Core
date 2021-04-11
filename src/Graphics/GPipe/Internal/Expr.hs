@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts, OverloadedStrings #-}
+{-# LANGUAGE GADTs, EmptyDataDecls, NoMonomorphismRestriction, TypeFamilies, ScopedTypeVariables, FlexibleInstances, RankNTypes, MultiParamTypeClasses, FlexibleContexts, OverloadedStrings, ViewPatterns, RecordWildCards #-}
 
 module Graphics.GPipe.Internal.Expr where
 
@@ -82,6 +82,15 @@ data ExprState = ExprState
     ,   shaderGeometry :: Maybe (GlobDeclM ()) -- Input/ouput layout declarations for current shader (if it is a geometry shader).
     }
 
+data ExprResult = ExprResult
+    { finalSource :: String -- Shader source produced.
+    , unis        :: [Int] -- Uniforms used in this shader.
+    , samps       :: [Int] -- Samplers used in this shader.
+    , inps        :: [Int] -- Inputs used in this shader (only varying or uniforms too?).
+    , prevDecls   :: GlobDeclM () -- Output declarations required in the previous shader (how it differs from the inputs used?).
+    , prevSs      :: ExprM () -- Expression to construct in the previous shader.
+    }
+
 {- Rough idea:
 
     makeDrawcall (sh, shd, _) =
@@ -101,14 +110,7 @@ data ExprState = ExprState
 runExprM
     :: GlobDeclM () -- output declarations to include in this shader
     -> ExprM () -- expression to construct in this shader (including assignements to the output variables)
-    -> IO
-        ( String -- Shader source produced.
-        , [Int] -- Uniforms used in this shader.
-        , [Int] -- Samplers used in this shader.
-        , [Int] -- Inputs used in this shader (only varying or uniforms too?).
-        , GlobDeclM () -- Output declarations required in the previous shader (how it differs from the inputs used?).
-        , ExprM () -- Expression to construct in the previous shader.
-        )
+    -> IO ExprResult
 runExprM d m = do
     (st, body) <- evalStateT (runWriterT (execStateT (runSNMapReaderT m) (ExprState Map.empty Map.empty Map.empty Nothing))) 0
     let (unis, uniDecls) = unzip $ Map.toAscList (shaderUsedUniformBlocks st)
@@ -116,21 +118,21 @@ runExprM d m = do
         (inps, inpDescs) = unzip $ Map.toAscList (shaderUsedInput st)
         geoDescs = shaderGeometry st
         (inpDecls, prevDesc) = unzip inpDescs
-        (prevSs, prevDecls) = unzip prevDesc
+        (sequence_ -> prevSs, sequence_ -> prevDecls) = unzip prevDesc
         decls = do
             d
             when (isJust geoDescs) (fromJust geoDescs)
             sequence_ uniDecls
             sequence_ sampDecls
             sequence_ inpDecls
-        source = mconcat
+        finalSource = mconcat
             [ "#version 450\n"
             , execWriter decls
             , "void main() {\n"
             , body
             , "}\n"
             ]
-    return (source, unis, samps, inps, sequence_ prevDecls, sequence_ prevSs)
+    return ExprResult{..}
 
 --------------------------------------------------------------------------------
 -- The section below is just an unused draft.
@@ -157,7 +159,7 @@ data ShaderStageOutput = ShaderStageOutput
 
 evaluateExpression :: [ExprM ()] -> ExprM () -> GlobDeclM () -> IO ShaderStageOutput
 evaluateExpression staticExpressions expression requiredOutputDeclarations = do
-    (s, u, ss, is, pds, pe) <- runExprM requiredOutputDeclarations expression
+    ExprResult s u ss is pds pe <- runExprM requiredOutputDeclarations expression
     case staticExpressions of
         (se:ses) -> evaluateExpression ses (pe >> se) pds
         [] -> return $ ShaderStageOutput s u ss is pds pe

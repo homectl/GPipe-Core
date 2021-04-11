@@ -36,6 +36,7 @@ module Graphics.GPipe (
     module Graphics.GPipe.FragmentStream,
     module Graphics.GPipe.FrameBuffer,
     module Graphics.GPipe.GeometryStream,
+    module Graphics.GPipe.Linear,
     module Graphics.GPipe.TransformFeedback,
     module Graphics.GPipe.Shader,
     module Graphics.GPipe.Expr,
@@ -43,25 +44,24 @@ module Graphics.GPipe (
     module Graphics.GPipe.Texture,
     module Graphics.GPipe.Sampler,
     module Graphics.GPipe.Orphans,
-    module Linear,
     module Data.Boolean
 )
 where
 
-import Graphics.GPipe.Context
-import Graphics.GPipe.Format
-import Graphics.GPipe.Buffer
-import Graphics.GPipe.PrimitiveArray
-import Graphics.GPipe.PrimitiveStream
-import Graphics.GPipe.FragmentStream
-import Graphics.GPipe.FrameBuffer
-import Graphics.GPipe.GeometryStream
-import Graphics.GPipe.TransformFeedback
-import Graphics.GPipe.Shader
-import Graphics.GPipe.Expr
-import Graphics.GPipe.Uniform
-import Graphics.GPipe.Texture
-import Graphics.GPipe.Sampler
-import Graphics.GPipe.Orphans
-import Linear
-import Data.Boolean
+import           Data.Boolean
+import           Graphics.GPipe.Buffer
+import           Graphics.GPipe.Context
+import           Graphics.GPipe.Expr
+import           Graphics.GPipe.Format
+import           Graphics.GPipe.FragmentStream
+import           Graphics.GPipe.FrameBuffer
+import           Graphics.GPipe.GeometryStream
+import           Graphics.GPipe.Linear
+import           Graphics.GPipe.Orphans
+import           Graphics.GPipe.PrimitiveArray
+import           Graphics.GPipe.PrimitiveStream
+import           Graphics.GPipe.Sampler
+import           Graphics.GPipe.Shader
+import           Graphics.GPipe.Texture
+import           Graphics.GPipe.TransformFeedback
+import           Graphics.GPipe.Uniform
