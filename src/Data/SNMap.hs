@@ -15,8 +15,6 @@ import           Control.Monad.Trans.Class        (MonadTrans (..))
 import           Control.Monad.Trans.State.Strict (StateT (StateT), evalStateT,
                                                    get, put)
 import qualified Data.HashMap.Strict              as HT
-import           Data.IORef                       (IORef, newIORef, readIORef,
-                                                   writeIORef)
 import           System.Mem.StableName            (StableName, makeStableName)
 
 {- A map (SN stands for stable name) to cache the results of computations
@@ -33,7 +31,7 @@ memoize :: MonadIO m
     -> m a                  -- The "IO call" to execute and cache the result.
     -> m a                  -- The result being naturally also returned.
 memoize getter putter m = do
-    s <- liftIO $ makeStableName $! m -- Does forcing the evaluation make sense here (since we try to avoid it...)? Is it just the first level?
+    s <- liftIO $ makeStableName m
     x <- HT.lookup s . unSNMap <$> getter
     case x of
         Just a -> return a
