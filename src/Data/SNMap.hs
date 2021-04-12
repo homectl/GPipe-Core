@@ -15,6 +15,8 @@ import           Control.Monad.Trans.Class        (MonadTrans (..))
 import           Control.Monad.Trans.State.Strict (StateT (StateT), evalStateT,
                                                    get, put)
 import qualified Data.HashMap.Strict              as HT
+import           Data.IORef                       (IORef, newIORef, readIORef,
+                                                   writeIORef)
 import           System.Mem.StableName            (StableName, makeStableName)
 
 {- A map (SN stands for stable name) to cache the results of computations
