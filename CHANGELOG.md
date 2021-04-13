@@ -1,12 +1,12 @@
 ### 0.2.3.1
 
-- 10-18x performance improvement in the shader compiler. This should speed up
-  your load times significantly if you have complex shaders. The shaders
-  themselves won't be faster, though.
-
 Huge thanks to the following people who helped identify optimisation opportunities:
 - dpwiz
 - Mikolaj Konarski
+
+- 10-18x performance improvement in the shader compiler. This should speed up
+  your load times significantly if you have complex shaders. The shaders
+  themselves won't be faster, though.
 
 ### 0.2.3.0
 
