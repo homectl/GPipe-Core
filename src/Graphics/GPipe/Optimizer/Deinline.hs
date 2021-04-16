@@ -1,5 +1,5 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections   #-}
 module Graphics.GPipe.Optimizer.Deinline where
 
 import           Control.Applicative                         (ZipList (..))
@@ -9,9 +9,9 @@ import           Data.Maybe                                  (listToMaybe)
 import           Debug.Trace                                 (trace)
 import           Graphics.GPipe.Optimizer.ConstExpr          (ConstExprs,
                                                               collectConstExprs)
-import qualified Graphics.GPipe.Optimizer.FunctionGenerator  as FunctionGenerator
 import           Graphics.GPipe.Optimizer.GLSL
 import qualified Graphics.GPipe.Optimizer.StructuralEquality as StructuralEquality
+import qualified Graphics.GPipe.Optimizer.FunctionGenerator as FunctionGenerator
 
 
 data Config = Config
@@ -22,17 +22,17 @@ data Config = Config
   --   drastically increases the cost of not finding any. This number does not
   --   matter if we always find an opportunity quickly.
 
-  , minRepeats   :: Int
+  , minRepeats :: Int
   -- ^ Minimum number of times a piece of code needs to appear for it to be
   --   worth extracting into a function.
 
-  , maxRepeats   :: Int
+  , maxRepeats :: Int
   -- ^ Maximum number of initial repeats to use for maximization. If we find
   --   enough, we're happy and stop looking. Most of the time we'll find fewer
   --   than 10, but sometimes a bit of code is repeated a lot which would slow
   --   down the algorithm significantly.
 
-  , windowSize   :: Int
+  , windowSize :: Int
   -- ^ Number of statements in the sliding window.
   }
 

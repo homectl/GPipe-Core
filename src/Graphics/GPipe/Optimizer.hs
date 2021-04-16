@@ -5,10 +5,10 @@ module Graphics.GPipe.Optimizer where
 import           Control.Monad                     (when)
 import qualified Data.Text.Lazy                    as LT
 import qualified Data.Text.Lazy.IO                 as IO
-import qualified Graphics.GPipe.Optimizer.Deinline as Deinline
 import           Graphics.GPipe.Optimizer.GLSL     (GLSL, parseGLSL,
                                                     parseShader, parseTest,
                                                     printShader)
+import qualified Graphics.GPipe.Optimizer.Deinline as Deinline
 
 
 optimizeShader :: LT.Text -> Either String LT.Text
